@@ -1,0 +1,34 @@
+# =========================================================
+# КОНФИГ БОТА. Меняйте только этот файл — код трогать не надо.
+# =========================================================
+
+# Telegram-каналы: приходят БЕЗ фильтра по теме, как есть
+# (просто уберите строку, чтобы отписаться от канала; добавьте новую — чтобы подписаться)
+telegram_channels:
+  - atamekenbusiness
+  - headlines_geo
+  - forklogAI
+  # sahwa_ru сознательно не добавлен
+
+# Мировые новости: проходят через фильтр тем (filter_topics ниже)
+world_news_rss:
+  - name: "Al Jazeera"
+    url: "https://www.aljazeera.com/xml/rss/all.xml"
+  - name: "Reuters"
+    url: "https://news.google.com/rss/search?q=when:1h+allinurl:reuters.com&hl=en-US&gl=US&ceid=US:en"
+  - name: "AP News"
+    url: "https://news.google.com/rss/search?q=when:1h+allinurl:apnews.com&hl=en-US&gl=US&ceid=US:en"
+  - name: "BBC World"
+    url: "http://feeds.bbci.co.uk/news/world/rss.xml"
+
+# Темы для фильтра мировых новостей (описывайте своими словами — Claude поймёт)
+filter_topics:
+  include:
+    - "мировая политика: войны, санкции, выборы, дипломатия, крупные международные события"
+    - "исламская тематика: мусульманский мир, хадж и умра, события в мусульманских странах, положение мусульман в мире"
+  exclude:
+    - "спорт, шоу-бизнес, светская хроника, погода"
+    - "материалы, продвигающие салафизм или религиозный экстремизм"
+
+# Как часто GitHub Actions будет запускать проверку (см. .github/workflows/news-bot.yml)
+check_interval_minutes: 15
