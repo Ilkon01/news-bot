@@ -1,21 +1,21 @@
 """
-Персональный новостной бот Ильяса.
+Персональный новостной бот.
 
 Что делает:
-1. Читает список Telegram-каналов и RSS-источников из config.yaml
-2. Telegram-каналы присылаются как есть (без фильтра тем)
-3. Мировые RSS-источники прогоняются через Claude — пропускаются только
-   темы из filter_topics.include, всё остальное отбрасывается
-4. Новое (ещё не отправленное) шлётся в личный Telegram-бот, каждая новость
-   отдельным сообщением
-5. Список уже отправленного хранится в state.json, чтобы не дублировать
+1. Читает Telegram-каналы (шлёт как есть) и мировые источники из config.yaml
+2. Мировые новости прогоняет через Claude: тот решает, подходит ли новость
+   под темы с их приоритетами, и если да — пишет краткий пересказ по-русски
+3. Отправляет в личный Telegram-бот, каждая новость отдельным сообщением,
+   внизу — ссылка на оригинал
+4. Отправленное запоминает в state.json, чтобы не дублировать
 
-Настройки меняются в config.yaml, этот файл трогать не нужно.
+Настройки — только в config.yaml.
 """
 
 import os
 import time
 import json
+import urllib.parse
 
 import requests
 import feedparser
@@ -25,7 +25,7 @@ import anthropic
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.yaml")
 STATE_PATH = os.path.join(os.path.dirname(__file__), "state.json")
-MAX_SEEN_ITEMS = 3000  # чтобы state.json не рос бесконечно
+MAX_SEEN_ITEMS = 5000
 
 TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
@@ -67,19 +67,21 @@ def send_telegram(text):
         )
         if not resp.ok:
             print("Ошибка отправки в Telegram:", resp.text)
+            return False
+        return True
     except Exception as e:
         print("Исключение при отправке в Telegram:", e)
+        return False
 
 
 def fetch_telegram_channel(channel):
-    """Читает последние публичные посты канала через t.me/s/<channel>.
-    Работает без входа в аккаунт, только для публичных каналов."""
+    """Читает последние публичные посты канала через t.me/s/<channel>."""
     url = f"https://t.me/s/{channel}"
     try:
         resp = requests.get(url, timeout=20, headers={"User-Agent": "Mozilla/5.0"})
         resp.raise_for_status()
     except Exception as e:
-        print(f"Не удалось прочитать канал {channel}: {e}")
+        print(f"[КАНАЛ {channel}] не удалось прочитать: {e}")
         return []
 
     soup = BeautifulSoup(resp.text, "html.parser")
@@ -97,100 +99,166 @@ def fetch_telegram_channel(channel):
             {
                 "id": link,
                 "source": f"Telegram: {channel}",
-                "title": text[:80],
+                "title": text[:120],
                 "text": text,
                 "link": link,
             }
         )
+    print(f"[КАНАЛ {channel}] получено постов: {len(items)}")
     return items
 
 
 def fetch_rss(name, url):
-    feed = feedparser.parse(url)
+    try:
+        feed = feedparser.parse(url)
+    except Exception as e:
+        print(f"[{name}] ошибка чтения RSS: {e}")
+        return []
+
     items = []
     for entry in feed.entries:
         link = entry.get("link", "")
         if not link:
             continue
-        title = entry.get("title", "")
-        summary = entry.get("summary", "")
         items.append(
-            {"id": link, "source": name, "title": title, "text": summary, "link": link}
+            {
+                "id": link,
+                "source": name,
+                "title": entry.get("title", ""),
+                "text": entry.get("summary", ""),
+                "link": link,
+            }
         )
+    if not items:
+        print(f"[{name}] ВНИМАНИЕ: не получено ни одной записи (проверьте URL)")
+    else:
+        print(f"[{name}] получено записей: {len(items)}")
     return items
 
 
-def passes_filter(item, filter_topics):
-    include = "\n".join(f"- {t}" for t in filter_topics.get("include", []))
-    exclude = "\n".join(f"- {t}" for t in filter_topics.get("exclude", []))
-    prompt = f"""Ты — фильтр новостей для одного конкретного читателя.
+def google_news_url(domain):
+    q = urllib.parse.quote(f"when:2h allinurl:{domain}")
+    return f"https://news.google.com/rss/search?q={q}&hl=en-US&gl=US&ceid=US:en"
 
+
+def build_filter_prompt(item, config):
+    topics_lines = "\n".join(
+        f"- {topic} (приоритет {weight})"
+        for topic, weight in config["topics"].items()
+        if weight > 0
+    )
+    never = "\n".join(f"- {x}" for x in config.get("never_send", []))
+    breaking = (
+        "Также пропускай крупные срочные мировые новости (breaking news), "
+        "даже если они не попадают ни под одну тему."
+        if config.get("breaking_news")
+        else ""
+    )
+
+    return f"""Ты — персональный новостной фильтр и редактор.
+
+НОВОСТЬ:
+Источник: {item['source']}
 Заголовок: {item['title']}
-Описание: {item['text'][:800]}
+Описание: {item['text'][:1500]}
 
-Пропускай (отвечай ДА) ТОЛЬКО если новость относится к одной из этих тем:
-{include}
+ТЕМЫ ЧИТАТЕЛЯ (приоритет 3 = присылать обязательно, 2 = присылать если новость
+заметная, 1 = только если это крупное громкое событие):
+{topics_lines}
 
-Отфильтровывай (отвечай НЕТ), если новость про:
-{exclude}
+НИКОГДА не пропускай:
+{never}
 
-Если новость не подходит ни под одну тему из списка "пропускай" — тоже отвечай НЕТ.
-Ответь строго одним словом: ДА или НЕТ."""
+{breaking}
 
+ЗАДАЧА:
+1. Реши, подходит ли новость читателю по правилам выше.
+2. Если подходит — напиши краткий пересказ НА РУССКОМ ЯЗЫКЕ: 2-3 предложения
+   своими словами, передающие суть. Не переводи дословно, не копируй фразы
+   из оригинала. Без вводных вроде «В статье говорится».
+
+Ответь СТРОГО в формате JSON, без markdown-разметки и без пояснений:
+{{"send": true/false, "topic": "название темы или BREAKING", "summary": "пересказ на русском"}}
+
+Если send=false, поля topic и summary оставь пустыми строками."""
+
+
+def evaluate(item, config):
+    """Возвращает (нужно_ли_слать, тема, пересказ_по-русски)."""
     try:
         resp = client.messages.create(
             model="claude-haiku-4-5-20251001",
-            max_tokens=5,
-            messages=[{"role": "user", "content": prompt}],
+            max_tokens=400,
+            messages=[{"role": "user", "content": build_filter_prompt(item, config)}],
         )
-        answer = resp.content[0].text.strip().upper()
-        return answer.startswith("ДА")
+        raw = resp.content[0].text.strip()
+        raw = raw.replace("```json", "").replace("```", "").strip()
+        data = json.loads(raw)
+        return bool(data.get("send")), data.get("topic", ""), data.get("summary", "")
     except Exception as e:
-        print("Ошибка фильтрации через Claude:", e)
-        return False  # при сбое лучше пропустить новость, чем случайно заспамить
+        print(f"[ФИЛЬТР] ошибка на новости «{item['title'][:60]}»: {e}")
+        return False, "", ""
 
 
-def format_message(item):
+def format_world_message(item, topic, summary):
+    header = f"<b>{item['source']}</b>"
+    if topic:
+        header += f" · {topic}"
+    return f"{header}\n\n{summary}\n\n🔗 {item['link']}"
+
+
+def format_channel_message(item):
     text = item["text"]
-    if len(text) > 500:
-        text = text[:500] + "…"
-    return f"<b>{item['source']}</b>\n{text}\n{item['link']}"
+    if len(text) > 700:
+        text = text[:700] + "…"
+    return f"<b>{item['source']}</b>\n\n{text}\n\n🔗 {item['link']}"
 
 
 def main():
     config = load_config()
     state = load_state()
     seen = set(state["seen"])
-    new_seen = list(state["seen"])
-    sent_count = 0
+    new_ids = []
+    sent = 0
+    limit = config.get("max_per_run", 0) or 10**9
 
-    jobs = []  # (item, filter_topics_or_None)
-
+    # --- Telegram-каналы: без фильтра ---
     for channel in config.get("telegram_channels", []):
         for item in fetch_telegram_channel(channel):
-            jobs.append((item, None))
+            if item["id"] in seen or sent >= limit:
+                continue
+            if send_telegram(format_channel_message(item)):
+                sent += 1
+            new_ids.append(item["id"])
+            time.sleep(1)
 
-    filter_topics = config.get("filter_topics", {})
+    # --- Мировые источники: фильтр + пересказ по-русски ---
+    world_items = []
     for src in config.get("world_news_rss", []):
-        for item in fetch_rss(src["name"], src["url"]):
-            jobs.append((item, filter_topics))
+        world_items += fetch_rss(src["name"], src["url"])
+    for src in config.get("google_news_sites", []):
+        world_items += fetch_rss(src["name"], google_news_url(src["domain"]))
 
-    for item, topics in jobs:
+    print(f"Всего мировых новостей получено: {len(world_items)}")
+
+    checked = 0
+    for item in world_items:
         if item["id"] in seen:
             continue
-
-        if topics is not None and not passes_filter(item, topics):
-            new_seen.append(item["id"])
+        if sent >= limit:
+            break
+        checked += 1
+        ok, topic, summary = evaluate(item, config)
+        new_ids.append(item["id"])
+        if not ok or not summary:
             continue
+        if send_telegram(format_world_message(item, topic, summary)):
+            sent += 1
+        time.sleep(1)
 
-        send_telegram(format_message(item))
-        sent_count += 1
-        new_seen.append(item["id"])
-        time.sleep(1)  # не спамить Telegram API подряд
-
-    state["seen"] = new_seen
+    state["seen"] = state["seen"] + new_ids
     save_state(state)
-    print(f"Готово. Отправлено новостей: {sent_count}")
+    print(f"Проверено новых мировых новостей: {checked}. Отправлено всего: {sent}")
 
 
 if __name__ == "__main__":
