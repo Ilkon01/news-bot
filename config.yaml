@@ -2,33 +2,100 @@
 # КОНФИГ БОТА. Меняйте только этот файл — код трогать не надо.
 # =========================================================
 
-# Telegram-каналы: приходят БЕЗ фильтра по теме, как есть
-# (просто уберите строку, чтобы отписаться от канала; добавьте новую — чтобы подписаться)
+# ---------- ЯЗЫК И ФОРМАТ ----------
+# Каждая новость приходит: краткий пересказ на русском (2-3 предложения) + ссылка на оригинал
+output_language: "русский"
+
+# ---------- TELEGRAM-КАНАЛЫ ----------
+# Приходят БЕЗ фильтра по теме, как есть (это ваши личные каналы)
 telegram_channels:
   - atamekenbusiness
   - headlines_geo
   - forklogAI
-  # sahwa_ru сознательно не добавлен
 
-# Мировые новости: проходят через фильтр тем (filter_topics ниже)
+# ---------- МИРОВЫЕ ИСТОЧНИКИ ----------
+# Проходят через фильтр тем + пересказываются на русском.
+# Прямые RSS (самые надёжные):
 world_news_rss:
   - name: "Al Jazeera"
     url: "https://www.aljazeera.com/xml/rss/all.xml"
-  - name: "Reuters"
-    url: "https://news.google.com/rss/search?q=when:1h+allinurl:reuters.com&hl=en-US&gl=US&ceid=US:en"
-  - name: "AP News"
-    url: "https://news.google.com/rss/search?q=when:1h+allinurl:apnews.com&hl=en-US&gl=US&ceid=US:en"
   - name: "BBC World"
     url: "http://feeds.bbci.co.uk/news/world/rss.xml"
+  - name: "Deutsche Welle"
+    url: "https://rss.dw.com/rdf/rss-en-world"
+  - name: "France 24"
+    url: "https://www.france24.com/en/rss"
+  - name: "The Guardian World"
+    url: "https://www.theguardian.com/world/rss"
+  - name: "Al Arabiya"
+    url: "https://english.alarabiya.net/tools/rss"
 
-# Темы для фильтра мировых новостей (описывайте своими словами — Claude поймёт)
-filter_topics:
-  include:
-    - "мировая политика: войны, санкции, выборы, дипломатия, крупные международные события"
-    - "исламская тематика: мусульманский мир, хадж и умра, события в мусульманских странах, положение мусульман в мире"
-  exclude:
-    - "спорт, шоу-бизнес, светская хроника, погода"
-    - "материалы, продвигающие салафизм или религиозный экстремизм"
+# Источники через поиск Google News по домену (для сайтов без своего RSS).
+# Чтобы добавить любой сайт — скопируйте строку и замените домен после allinurl:
+google_news_sites:
+  - name: "Reuters"
+    domain: "reuters.com"
+  - name: "AP News"
+    domain: "apnews.com"
+  - name: "Bloomberg"
+    domain: "bloomberg.com"
+  - name: "Financial Times"
+    domain: "ft.com"
+  - name: "South China Morning Post"
+    domain: "scmp.com"
+  - name: "Nikkei Asia"
+    domain: "asia.nikkei.com"
+  - name: "The Straits Times"
+    domain: "straitstimes.com"
+  - name: "Middle East Eye"
+    domain: "middleeasteye.net"
+  - name: "Anadolu Agency"
+    domain: "aa.com.tr"
+  - name: "Tengrinews"
+    domain: "tengrinews.kz"
+  - name: "Astana Times"
+    domain: "astanatimes.com"
+  - name: "Kursiv"
+    domain: "kursiv.media"
+  - name: "Kazinform"
+    domain: "inform.kz"
+  - name: "Eurasianet"
+    domain: "eurasianet.org"
 
-# Как часто GitHub Actions будет запускать проверку (см. .github/workflows/news-bot.yml)
-check_interval_minutes: 15
+# ---------- ТЕМЫ И ПРИОРИТЕТЫ ----------
+# 3 = присылать обязательно, 2 = присылать если новость заметная,
+# 1 = только если это крупное/громкое событие, 0 = не присылать вообще
+topics:
+  "Ближневосточный конфликт (Израиль, Газа, Ливан, Иран)": 3
+  "Внутренняя политика Казахстана": 3
+  "Отношения Казахстана с Китаем, Россией, Западом": 3
+  "Экономика и рынки Казахстана": 3
+  "Мировая экономика и рынки": 3
+  "Санкции и торговые войны": 3
+  "Технологии и искусственный интеллект": 3
+  "Религия и мусульманский мир": 3
+  "Военные конфликты в мире (кроме Украины и Ближнего Востока)": 3
+  "Война в Украине и Россия": 2
+  "Выборы в других странах": 2
+  "Криптовалюта": 2
+  "Наука и космос": 2
+  "Климат и экология": 2
+  "Терроризм и экстремизм (события, не пропаганда)": 2
+  "Миграция и беженцы": 2
+  "Положение мусульман в немусульманских странах": 2
+  "Хадж, умра, паломничество": 1
+  "Спорт": 1
+  "Шоу-бизнес и культура": 1
+
+# Присылать крупные срочные новости (breaking news), даже если тема не из списка выше
+breaking_news: true
+
+# Что не присылать никогда
+never_send:
+  - "материалы, продвигающие салафизм или религиозный экстремизм"
+  - "светская хроника, сплетни о знаменитостях"
+  - "реклама и промо-материалы"
+
+# Максимум новостей за один запуск (защита от спама при первом старте).
+# Поставьте 0, чтобы снять ограничение.
+max_per_run: 25
