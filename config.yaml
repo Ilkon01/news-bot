@@ -4,58 +4,65 @@
 # =========================================================
 
 # ---------- TELEGRAM-КАНАЛЫ ----------
-# Приходят БЕЗ фильтра, как есть
 telegram_channels:
   - atamekenbusiness
   - headlines_geo
   - forklogAI
 
 # ---------- МИРОВЫЕ ИСТОЧНИКИ ----------
+# Собственные RSS изданий (самые свежие и надёжные)
 world_news_rss:
   - name: "Al Jazeera"
     url: "https://www.aljazeera.com/xml/rss/all.xml"
   - name: "BBC World"
     url: "http://feeds.bbci.co.uk/news/world/rss.xml"
+  - name: "BBC Business"
+    url: "http://feeds.bbci.co.uk/news/business/rss.xml"
   - name: "Deutsche Welle"
     url: "https://rss.dw.com/rdf/rss-en-world"
   - name: "France 24"
     url: "https://www.france24.com/en/rss"
   - name: "The Guardian World"
     url: "https://www.theguardian.com/world/rss"
-  - name: "Al Arabiya"
-    url: "https://english.alarabiya.net/tools/rss"
 
-google_news_sites:
+  # --- Через Google News (для изданий без своего RSS) ---
+  # Формат: site:домен + when:1d (за сутки). Чтобы добавить издание,
+  # скопируйте строку и замените домен.
   - name: "Reuters"
-    domain: "reuters.com"
+    url: "https://news.google.com/rss/search?q=site%3Areuters.com+when%3A1d&hl=en-US&gl=US&ceid=US:en"
   - name: "AP News"
-    domain: "apnews.com"
+    url: "https://news.google.com/rss/search?q=site%3Aapnews.com+when%3A1d&hl=en-US&gl=US&ceid=US:en"
   - name: "Bloomberg"
-    domain: "bloomberg.com"
-  - name: "Financial Times"
-    domain: "ft.com"
-  - name: "South China Morning Post"
-    domain: "scmp.com"
-  - name: "Nikkei Asia"
-    domain: "asia.nikkei.com"
+    url: "https://news.google.com/rss/search?q=site%3Abloomberg.com+when%3A1d&hl=en-US&gl=US&ceid=US:en"
+  - name: "Al Arabiya"
+    url: "https://news.google.com/rss/search?q=site%3Aenglish.alarabiya.net+when%3A1d&hl=en-US&gl=US&ceid=US:en"
   - name: "Middle East Eye"
-    domain: "middleeasteye.net"
+    url: "https://news.google.com/rss/search?q=site%3Amiddleeasteye.net+when%3A1d&hl=en-US&gl=US&ceid=US:en"
   - name: "Anadolu Agency"
-    domain: "aa.com.tr"
+    url: "https://news.google.com/rss/search?q=site%3Aaa.com.tr+when%3A1d&hl=en-US&gl=US&ceid=US:en"
+  - name: "South China Morning Post"
+    url: "https://news.google.com/rss/search?q=site%3Ascmp.com+when%3A1d&hl=en-US&gl=US&ceid=US:en"
+  - name: "Nikkei Asia"
+    url: "https://news.google.com/rss/search?q=site%3Aasia.nikkei.com+when%3A1d&hl=en-US&gl=US&ceid=US:en"
   - name: "Tengrinews"
-    domain: "tengrinews.kz"
+    url: "https://news.google.com/rss/search?q=site%3Atengrinews.kz+when%3A1d&hl=en-US&gl=US&ceid=US:en"
   - name: "Astana Times"
-    domain: "astanatimes.com"
+    url: "https://news.google.com/rss/search?q=site%3Aastanatimes.com+when%3A1d&hl=en-US&gl=US&ceid=US:en"
   - name: "Kursiv"
-    domain: "kursiv.media"
+    url: "https://news.google.com/rss/search?q=site%3Akursiv.media+when%3A1d&hl=en-US&gl=US&ceid=US:en"
   - name: "Eurasianet"
-    domain: "eurasianet.org"
+    url: "https://news.google.com/rss/search?q=site%3Aeurasianet.org+when%3A1d&hl=en-US&gl=US&ceid=US:en"
+
+  # --- Тематические подборки Google News (со всего мира сразу) ---
+  - name: "Казахстан (все источники)"
+    url: "https://news.google.com/rss/search?q=Kazakhstan+when%3A1d&hl=ru&gl=KZ&ceid=KZ:ru"
+  - name: "Мир (Google News)"
+    url: "https://news.google.com/rss/headlines/section/topic/WORLD?hl=en-US&gl=US&ceid=US:en"
+  - name: "Экономика (Google News)"
+    url: "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-US&gl=US&ceid=US:en"
 
 # ---------- ШАГ 1: БЕСПЛАТНЫЙ ОТСЕВ ПО СЛОВАМ ----------
 # Новость идёт к ИИ, только если содержит хотя бы одно слово отсюда.
-# Это бесплатно и мгновенно — так мы укладываемся в лимиты Gemini.
-# Слова ищутся в заголовке и описании, регистр не важен, часть слова тоже
-# считается (напр. "sanction" поймает "sanctions", "sanctioned").
 keywords:
   # Ближний Восток
   - israel
@@ -75,14 +82,19 @@ keywords:
   - erdogan
   # Казахстан и регион
   - kazakh
+  - казахстан
   - almaty
+  - алматы
   - astana
+  - астана
   - tokayev
+  - токаев
   - central asia
   - uzbek
   - kyrgyz
   - caspian
   - tenge
+  - тенге
   # Геополитика и конфликты
   - war
   - military
@@ -109,6 +121,7 @@ keywords:
   - korea
   # Санкции, экономика, рынки
   - sanction
+  - санкц
   - tariff
   - trade war
   - export control
@@ -116,6 +129,7 @@ keywords:
   - opec
   - gas price
   - inflation
+  - инфляц
   - central bank
   - interest rate
   - recession
@@ -124,6 +138,7 @@ keywords:
   - stock market
   - economy
   - economic
+  - экономик
   - currency
   - default
   # Технологии и ИИ
@@ -141,6 +156,8 @@ keywords:
   # Религия и мусульманский мир
   - muslim
   - islam
+  - ислам
+  - мусульман
   - mosque
   - quran
   - hajj
@@ -148,8 +165,9 @@ keywords:
   - ramadan
   - sharia
   - uyghur
-  # Прочее из ваших тем
+  # Прочее
   - election
+  - выбор
   - refugee
   - migrant
   - migration
@@ -163,8 +181,6 @@ keywords:
   - diplomat
 
 # ---------- ШАГ 2: ТОЧНЫЙ ФИЛЬТР ЧЕРЕЗ ИИ ----------
-# Приоритеты: 3 = присылать обязательно, 2 = если новость заметная,
-# 1 = только крупное событие, 0 = не присылать
 topics:
   "Ближневосточный конфликт (Израиль, Газа, Ливан, Иран)": 3
   "Внутренняя политика Казахстана": 3
@@ -194,10 +210,6 @@ never_send:
   - "светская хроника, сплетни о знаменитостях"
   - "реклама и промо-материалы"
 
-# ---------- ЛИМИТЫ (защита от превышения бесплатного тарифа) ----------
-# Максимум обращений к Gemini за один запуск.
-# 12 запусков в сутки × 40 = 480 запросов, при лимите 1500 — с большим запасом.
+# ---------- ЛИМИТЫ ----------
 max_ai_calls_per_run: 40
-
-# Максимум отправленных сообщений за один запуск
 max_per_run: 25
