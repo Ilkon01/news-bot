@@ -2,23 +2,23 @@
 Персональный новостной бот (бесплатная версия на Google Gemini).
 
 Как работает:
-1. Telegram-каналы — присылаются как есть, без фильтра и без ИИ (бесплатно)
-2. Мировые новости проходят два этапа:
-   ШАГ 1 — бесплатный отсев по ключевым словам из config.yaml
-           (отсекает большую часть, не тратит лимиты)
-   ШАГ 2 — то, что прошло, идёт в Gemini: он решает, подходит ли новость
-           по темам, и пишет краткий пересказ на русском
-3. Отправка в личный Telegram-бот, каждая новость отдельным сообщением,
-   внизу ссылка на оригинал
-4. Отправленное запоминается в state.json, чтобы не дублировать
+1. Telegram-каналы — присылаются как есть, без ИИ
+2. Мировые новости проходят три этапа отсева:
+   ШАГ 1 — только свежие (по времени публикации), бесплатно
+   ШАГ 2 — отсев по ключевым словам, бесплатно
+   ШАГ 3 — то, что прошло, идёт в Gemini: проверка по темам + пересказ на русском
+3. Отправка в Telegram, каждая новость отдельным сообщением, внизу ссылка
+4. Отправленное запоминается в state.json
 
 Настройки — только в config.yaml.
 """
 
 import os
+import re
 import time
 import json
-import urllib.parse
+import calendar
+from datetime import datetime, timezone
 
 import requests
 import feedparser
@@ -27,13 +27,14 @@ from bs4 import BeautifulSoup
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.yaml")
 STATE_PATH = os.path.join(os.path.dirname(__file__), "state.json")
-MAX_SEEN_ITEMS = 5000
+MAX_SEEN_ITEMS = 8000
 
 TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 
-GEMINI_MODEL = "gemini-flash-latest"
+# Flash-Lite: самый щедрый бесплатный лимит (15 запросов в минуту)
+GEMINI_MODEL = "gemini-flash-lite-latest"
 GEMINI_URL = (
     f"https://generativelanguage.googleapis.com/v1beta/models/"
     f"{GEMINI_MODEL}:generateContent"
@@ -72,7 +73,7 @@ def send_telegram(text):
             timeout=20,
         )
         if not resp.ok:
-            print("Ошибка отправки в Telegram:", resp.text)
+            print("Ошибка отправки в Telegram:", resp.text[:200])
             return False
         return True
     except Exception as e:
@@ -107,10 +108,20 @@ def fetch_telegram_channel(channel):
                 "title": text[:120],
                 "text": text,
                 "link": link,
+                "age_hours": 0.0,  # каналы не фильтруем по возрасту
             }
         )
     print(f"[КАНАЛ {channel}] постов: {len(items)}")
     return items
+
+
+def entry_age_hours(entry):
+    """Сколько часов назад опубликовано. None, если дата не указана."""
+    tm = entry.get("published_parsed") or entry.get("updated_parsed")
+    if not tm:
+        return None
+    published = datetime.fromtimestamp(calendar.timegm(tm), tz=timezone.utc)
+    return (datetime.now(timezone.utc) - published).total_seconds() / 3600
 
 
 def fetch_rss(name, url):
@@ -132,6 +143,7 @@ def fetch_rss(name, url):
                 "title": entry.get("title", ""),
                 "text": entry.get("summary", ""),
                 "link": link,
+                "age_hours": entry_age_hours(entry),
             }
         )
     if not items:
@@ -141,15 +153,33 @@ def fetch_rss(name, url):
     return items
 
 
-def google_news_url(domain):
-    q = urllib.parse.quote(f"when:2h allinurl:{domain}")
-    return f"https://news.google.com/rss/search?q={q}&hl=en-US&gl=US&ceid=US:en"
+def is_fresh(item, max_age_hours):
+    """ШАГ 1 — отсев по свежести. Без даты считаем свежей."""
+    if item["age_hours"] is None:
+        return True
+    return item["age_hours"] <= max_age_hours
 
 
-def passes_keywords(item, keywords):
-    """ШАГ 1 — бесплатный отсев. Без обращения к ИИ."""
-    haystack = f" {item['title']} {item['text']} ".lower()
-    return any(kw.lower() in haystack for kw in keywords)
+def build_keyword_patterns(keywords):
+    """Готовит регулярки с границами слов, чтобы 'war' не ловил 'warning'."""
+    patterns = []
+    for kw in keywords:
+        kw = kw.strip().lower()
+        if not kw:
+            continue
+        if kw.endswith("*"):  # 'санкц*' — совпадение по началу слова
+            patterns.append(re.compile(r"\b" + re.escape(kw[:-1]), re.IGNORECASE))
+        else:
+            patterns.append(
+                re.compile(r"\b" + re.escape(kw) + r"\b", re.IGNORECASE)
+            )
+    return patterns
+
+
+def passes_keywords(item, patterns):
+    """ШАГ 2 — бесплатный отсев по словам."""
+    haystack = f"{item['title']} {item['text']}"
+    return any(p.search(haystack) for p in patterns)
 
 
 def build_prompt(item, config):
@@ -169,7 +199,7 @@ def build_prompt(item, config):
 НОВОСТЬ:
 Источник: {item['source']}
 Заголовок: {item['title']}
-Описание: {item['text'][:1200]}
+Описание: {item['text'][:1000]}
 
 ТЕМЫ ЧИТАТЕЛЯ (3 = присылать обязательно, 2 = если новость заметная,
 1 = только если это крупное громкое событие):
@@ -180,52 +210,70 @@ def build_prompt(item, config):
 
 {breaking}
 
+Будь строгим: если новость проходная, местечковая или интересна только
+жителям одной страны и не входит в темы — отвечай send: false.
+
 ЗАДАЧА:
 1. Реши, подходит ли новость читателю.
 2. Если подходит — напиши краткий пересказ НА РУССКОМ: 2-3 предложения
-   своими словами, передающие суть. Не переводи дословно и не копируй
-   фразы из оригинала. Без вводных вроде «В статье говорится».
+   своими словами. Не переводи дословно и не копируй фразы из оригинала.
 
 Ответь СТРОГО в формате JSON, без markdown и без пояснений:
 {{"send": true, "topic": "тема или BREAKING", "summary": "пересказ"}}
-Если новость не подходит: {{"send": false, "topic": "", "summary": ""}}"""
+Если не подходит: {{"send": false, "topic": "", "summary": ""}}"""
 
 
 def ask_gemini(item, config):
-    """ШАГ 2 — точная проверка + пересказ. Возвращает (слать, тема, пересказ)."""
+    """ШАГ 3. Возвращает (слать, тема, пересказ) либо None — лимит исчерпан."""
     payload = {
         "contents": [{"parts": [{"text": build_prompt(item, config)}]}],
         "generationConfig": {"temperature": 0.2, "maxOutputTokens": 500},
     }
-    try:
-        resp = requests.post(
-            GEMINI_URL,
-            headers={
-                "Content-Type": "application/json",
-                "x-goog-api-key": GEMINI_API_KEY,
-            },
-            json=payload,
-            timeout=40,
-        )
+    headers = {"Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY}
+
+    for attempt in range(3):
+        try:
+            resp = requests.post(GEMINI_URL, headers=headers, json=payload, timeout=45)
+        except Exception as e:
+            print(f"[GEMINI] сеть: {e}")
+            time.sleep(5)
+            continue
+
+        # Перегрузка на стороне Google — ждём и пробуем снова
+        if resp.status_code == 503:
+            wait = 10 * (attempt + 1)
+            print(f"[GEMINI] модель перегружена, жду {wait}с (попытка {attempt + 1}/3)")
+            time.sleep(wait)
+            continue
+
+        # Слишком часто — подождать и повторить; на третий раз сдаёмся
         if resp.status_code == 429:
-            print("[GEMINI] превышен бесплатный лимит, пропускаю остальное")
+            if attempt < 2:
+                print("[GEMINI] слишком часто, жду 30с")
+                time.sleep(30)
+                continue
+            print("[GEMINI] дневной лимит исчерпан, останавливаюсь")
             return None
+
         if not resp.ok:
-            print(f"[GEMINI] ошибка {resp.status_code}: {resp.text[:300]}")
+            print(f"[GEMINI] ошибка {resp.status_code}: {resp.text[:200]}")
             return False, "", ""
 
-        data = resp.json()
-        raw = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-        raw = raw.replace("```json", "").replace("```", "").strip()
-        parsed = json.loads(raw)
-        return (
-            bool(parsed.get("send")),
-            parsed.get("topic", ""),
-            parsed.get("summary", ""),
-        )
-    except Exception as e:
-        print(f"[GEMINI] сбой на «{item['title'][:60]}»: {e}")
-        return False, "", ""
+        try:
+            raw = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+            raw = raw.replace("```json", "").replace("```", "").strip()
+            parsed = json.loads(raw)
+            return (
+                bool(parsed.get("send")),
+                parsed.get("topic", ""),
+                parsed.get("summary", ""),
+            )
+        except Exception as e:
+            print(f"[GEMINI] не разобрал ответ на «{item['title'][:50]}»: {e}")
+            return False, "", ""
+
+    print("[GEMINI] три попытки не удались, пропускаю новость")
+    return False, "", ""
 
 
 def format_world_message(item, topic, summary):
@@ -250,8 +298,10 @@ def main():
     sent = 0
 
     send_limit = config.get("max_per_run", 0) or 10**9
-    ai_limit = config.get("max_ai_calls_per_run", 40)
-    keywords = config.get("keywords", [])
+    ai_limit = config.get("max_ai_calls_per_run", 30)
+    max_age = config.get("max_age_hours", 4)
+    pause = config.get("seconds_between_ai_calls", 5)
+    patterns = build_keyword_patterns(config.get("keywords", []))
 
     # --- Telegram-каналы: без ИИ ---
     for channel in config.get("telegram_channels", []):
@@ -267,38 +317,44 @@ def main():
     world_items = []
     for src in config.get("world_news_rss", []):
         world_items += fetch_rss(src["name"], src["url"])
-    for src in config.get("google_news_sites", []):
-        world_items += fetch_rss(src["name"], google_news_url(src["domain"]))
 
-    fresh = [i for i in world_items if i["id"] not in seen]
-    print(f"Мировых новостей всего: {len(world_items)}, из них новых: {len(fresh)}")
+    fresh_new = [
+        i for i in world_items if i["id"] not in seen and is_fresh(i, max_age)
+    ]
+    stale_or_old = [i for i in world_items if i["id"] not in seen and i not in fresh_new]
+    for i in stale_or_old:
+        new_ids.append(i["id"])
 
-    # ШАГ 1 — бесплатный отсев
-    candidates = [i for i in fresh if passes_keywords(i, keywords)]
-    skipped = len(fresh) - len(candidates)
-    for item in fresh:
-        if item not in candidates:
-            new_ids.append(item["id"])
-    print(f"Отсеяно по ключевым словам без ИИ: {skipped}")
+    print(f"Всего получено: {len(world_items)}")
+    print(f"Новых и свежих (моложе {max_age} ч): {len(fresh_new)}")
+
+    # ШАГ 2 — ключевые слова
+    candidates = [i for i in fresh_new if passes_keywords(i, patterns)]
+    for i in fresh_new:
+        if i not in candidates:
+            new_ids.append(i["id"])
+    print(f"Прошло отсев по словам: {len(candidates)} (отсеяно {len(fresh_new) - len(candidates)})")
     print(f"Пойдёт в Gemini: {min(len(candidates), ai_limit)}")
 
-    # ШАГ 2 — Gemini
+    # ШАГ 3 — Gemini
     ai_used = 0
     for item in candidates:
         if ai_used >= ai_limit or sent >= send_limit:
             break
-        result = ask_gemini(item, config)
-        if result is None:  # исчерпан дневной лимит Gemini
-            break
-        ai_used += 1
-        new_ids.append(item["id"])
 
+        result = ask_gemini(item, config)
+        ai_used += 1
+
+        if result is None:  # лимит исчерпан — прекращаем, остальное на след. раз
+            break
+
+        new_ids.append(item["id"])
         ok, topic, summary = result
-        if not ok or not summary:
-            continue
-        if send_telegram(format_world_message(item, topic, summary)):
-            sent += 1
-        time.sleep(4)  # не более ~15 запросов в минуту (бесплатный лимит)
+        if ok and summary:
+            if send_telegram(format_world_message(item, topic, summary)):
+                sent += 1
+
+        time.sleep(pause)  # пауза выполняется ВСЕГДА, даже после ошибки
 
     state["seen"] = state["seen"] + new_ids
     save_state(state)
