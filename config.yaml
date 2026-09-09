@@ -10,7 +10,6 @@ telegram_channels:
   - forklogAI
 
 # ---------- МИРОВЫЕ ИСТОЧНИКИ ----------
-# Собственные RSS изданий (самые свежие и надёжные)
 world_news_rss:
   - name: "Al Jazeera"
     url: "https://www.aljazeera.com/xml/rss/all.xml"
@@ -24,10 +23,6 @@ world_news_rss:
     url: "https://www.france24.com/en/rss"
   - name: "The Guardian World"
     url: "https://www.theguardian.com/world/rss"
-
-  # --- Через Google News (для изданий без своего RSS) ---
-  # Формат: site:домен + when:1d (за сутки). Чтобы добавить издание,
-  # скопируйте строку и замените домен.
   - name: "Reuters"
     url: "https://news.google.com/rss/search?q=site%3Areuters.com+when%3A1d&hl=en-US&gl=US&ceid=US:en"
   - name: "AP News"
@@ -52,8 +47,6 @@ world_news_rss:
     url: "https://news.google.com/rss/search?q=site%3Akursiv.media+when%3A1d&hl=en-US&gl=US&ceid=US:en"
   - name: "Eurasianet"
     url: "https://news.google.com/rss/search?q=site%3Aeurasianet.org+when%3A1d&hl=en-US&gl=US&ceid=US:en"
-
-  # --- Тематические подборки Google News (со всего мира сразу) ---
   - name: "Казахстан (все источники)"
     url: "https://news.google.com/rss/search?q=Kazakhstan+when%3A1d&hl=ru&gl=KZ&ceid=KZ:ru"
   - name: "Мир (Google News)"
@@ -61,126 +54,149 @@ world_news_rss:
   - name: "Экономика (Google News)"
     url: "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-US&gl=US&ceid=US:en"
 
-# ---------- ШАГ 1: БЕСПЛАТНЫЙ ОТСЕВ ПО СЛОВАМ ----------
-# Новость идёт к ИИ, только если содержит хотя бы одно слово отсюда.
+# ---------- ШАГ 1: ТОЛЬКО СВЕЖЕЕ ----------
+# Новости старше этого числа часов не рассматриваются вообще.
+# При запуске раз в 2 часа значение 4 даёт запас на случай пропуска запуска.
+max_age_hours: 4
+
+# ---------- ШАГ 2: ОТСЕВ ПО СЛОВАМ ----------
+# Слово ищется целиком (war не поймает warning).
+# Звёздочка в конце = совпадение по началу слова: санкц* поймает
+# «санкции», «санкционный». Пишите слова в нижнем регистре.
 keywords:
   # Ближний Восток
   - israel
+  - israeli
   - gaza
-  - palestin
+  - palestin*
   - lebanon
   - hezbollah
   - hamas
   - iran
+  - iranian
   - syria
   - yemen
-  - houthi
+  - houthi*
   - saudi
   - qatar
-  - emirates
-  - turkey
   - erdogan
-  # Казахстан и регион
-  - kazakh
-  - казахстан
+  - израил*
+  - газа
+  - иран
+  - сири*
+  # Казахстан и Центральная Азия
+  - kazakh*
   - almaty
-  - алматы
   - astana
-  - астана
   - tokayev
-  - токаев
-  - central asia
-  - uzbek
-  - kyrgyz
+  - uzbekistan
+  - kyrgyzstan
+  - turkmenistan
+  - tajikistan
   - caspian
   - tenge
+  - казахстан*
+  - алматы
+  - астана
+  - токаев
   - тенге
   # Геополитика и конфликты
   - war
+  - warfare
   - military
   - troops
-  - strike
+  - airstrike
   - missile
+  - drone
   - conflict
   - ceasefire
   - coup
   - nato
-  - united nations
-  - security council
-  - china
-  - beijing
-  - russia
+  - "united nations"
+  - "security council"
+  - sanctions
+  - sanction
   - putin
   - kremlin
   - ukraine
-  - india
-  - pakistan
-  - africa
-  - venezuela
   - taiwan
-  - korea
-  # Санкции, экономика, рынки
-  - sanction
-  - санкц
-  - tariff
-  - trade war
-  - export control
-  - oil
+  - "north korea"
+  - "south korea"
+  - война
+  - войны
+  - санкц*
+  - переговор*
+  # Экономика и рынки
+  - tariff*
+  - "trade war"
+  - "export control"
   - opec
-  - gas price
+  - "oil price"
+  - "oil prices"
   - inflation
-  - инфляц
-  - central bank
-  - interest rate
+  - "central bank"
+  - "interest rate"
+  - "interest rates"
   - recession
   - imf
-  - world bank
-  - stock market
-  - economy
-  - economic
-  - экономик
-  - currency
-  - default
+  - "world bank"
+  - "stock market"
+  - gdp
+  - devaluation
+  - инфляц*
+  - нефт*
+  - рынк*
+  - экономик*
   # Технологии и ИИ
-  - artificial intelligence
-  - " ai "
+  - "artificial intelligence"
   - openai
   - anthropic
+  - deepmind
   - nvidia
-  - semiconductor
-  - chip
-  - data center
-  - crypto
+  - semiconductor*
+  - "data center"
+  - "data centre"
+  - chatgpt
+  - crypto*
   - bitcoin
   - blockchain
+  - криптовалют*
+  - биткоин
+  - искусственн*
   # Религия и мусульманский мир
-  - muslim
+  - muslim*
   - islam
-  - ислам
-  - мусульман
+  - islamic
   - mosque
   - quran
   - hajj
   - umrah
   - ramadan
   - sharia
-  - uyghur
+  - uyghur*
+  - ислам*
+  - мусульман*
+  - хадж
+  - умра
   # Прочее
   - election
-  - выбор
-  - refugee
-  - migrant
-  - migration
-  - terror
-  - extremis
-  - space
+  - elections
+  - referendum
+  - refugee*
+  - migrant*
+  - terrorism
+  - terrorist
+  - extremis*
   - nasa
-  - climate
+  - spacex
+  - "climate change"
   - summit
   - treaty
-  - diplomat
+  - выбор*
+  - беженц*
+  - терроризм
 
-# ---------- ШАГ 2: ТОЧНЫЙ ФИЛЬТР ЧЕРЕЗ ИИ ----------
+# ---------- ШАГ 3: ТОЧНЫЙ ФИЛЬТР ЧЕРЕЗ ИИ ----------
 topics:
   "Ближневосточный конфликт (Израиль, Газа, Ливан, Иран)": 3
   "Внутренняя политика Казахстана": 3
@@ -209,7 +225,15 @@ never_send:
   - "материалы, продвигающие салафизм или религиозный экстремизм"
   - "светская хроника, сплетни о знаменитостях"
   - "реклама и промо-материалы"
+  - "криминальная хроника местного значения"
 
 # ---------- ЛИМИТЫ ----------
-max_ai_calls_per_run: 40
-max_per_run: 25
+# Обращений к Gemini за один запуск. 12 запусков в сутки × 30 = 360,
+# при бесплатном лимите ~1000-1500 в сутки это с запасом.
+max_ai_calls_per_run: 30
+
+# Пауза между обращениями к Gemini, секунд (защита от лимита в минуту)
+seconds_between_ai_calls: 5
+
+# Максимум отправленных сообщений за запуск
+max_per_run: 20
