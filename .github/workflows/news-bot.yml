@@ -2,8 +2,8 @@ name: News bot
 
 on:
   schedule:
-    - cron: '*/15 * * * *'   # каждые 15 минут (GitHub может добавить задержку в пару минут)
-  workflow_dispatch: {}       # позволяет запустить вручную кнопкой в GitHub
+    - cron: '0 */2 * * *'    # каждые 2 часа (экономит бесплатный лимит Gemini)
+  workflow_dispatch: {}       # позволяет запустить вручную кнопкой
 
 jobs:
   run:
@@ -22,7 +22,7 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python news_bot.py
 
       - name: Сохранить state.json обратно в репозиторий
