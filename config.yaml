@@ -1,21 +1,16 @@
 # =========================================================
-# КОНФИГ БОТА. Меняйте только этот файл — код трогать не надо.
+# КОНФИГ БОТА. Меняйте только этот файл.
+# Версия на бесплатном Google Gemini.
 # =========================================================
 
-# ---------- ЯЗЫК И ФОРМАТ ----------
-# Каждая новость приходит: краткий пересказ на русском (2-3 предложения) + ссылка на оригинал
-output_language: "русский"
-
 # ---------- TELEGRAM-КАНАЛЫ ----------
-# Приходят БЕЗ фильтра по теме, как есть (это ваши личные каналы)
+# Приходят БЕЗ фильтра, как есть
 telegram_channels:
   - atamekenbusiness
   - headlines_geo
   - forklogAI
 
 # ---------- МИРОВЫЕ ИСТОЧНИКИ ----------
-# Проходят через фильтр тем + пересказываются на русском.
-# Прямые RSS (самые надёжные):
 world_news_rss:
   - name: "Al Jazeera"
     url: "https://www.aljazeera.com/xml/rss/all.xml"
@@ -30,8 +25,6 @@ world_news_rss:
   - name: "Al Arabiya"
     url: "https://english.alarabiya.net/tools/rss"
 
-# Источники через поиск Google News по домену (для сайтов без своего RSS).
-# Чтобы добавить любой сайт — скопируйте строку и замените домен после allinurl:
 google_news_sites:
   - name: "Reuters"
     domain: "reuters.com"
@@ -45,8 +38,6 @@ google_news_sites:
     domain: "scmp.com"
   - name: "Nikkei Asia"
     domain: "asia.nikkei.com"
-  - name: "The Straits Times"
-    domain: "straitstimes.com"
   - name: "Middle East Eye"
     domain: "middleeasteye.net"
   - name: "Anadolu Agency"
@@ -57,14 +48,123 @@ google_news_sites:
     domain: "astanatimes.com"
   - name: "Kursiv"
     domain: "kursiv.media"
-  - name: "Kazinform"
-    domain: "inform.kz"
   - name: "Eurasianet"
     domain: "eurasianet.org"
 
-# ---------- ТЕМЫ И ПРИОРИТЕТЫ ----------
-# 3 = присылать обязательно, 2 = присылать если новость заметная,
-# 1 = только если это крупное/громкое событие, 0 = не присылать вообще
+# ---------- ШАГ 1: БЕСПЛАТНЫЙ ОТСЕВ ПО СЛОВАМ ----------
+# Новость идёт к ИИ, только если содержит хотя бы одно слово отсюда.
+# Это бесплатно и мгновенно — так мы укладываемся в лимиты Gemini.
+# Слова ищутся в заголовке и описании, регистр не важен, часть слова тоже
+# считается (напр. "sanction" поймает "sanctions", "sanctioned").
+keywords:
+  # Ближний Восток
+  - israel
+  - gaza
+  - palestin
+  - lebanon
+  - hezbollah
+  - hamas
+  - iran
+  - syria
+  - yemen
+  - houthi
+  - saudi
+  - qatar
+  - emirates
+  - turkey
+  - erdogan
+  # Казахстан и регион
+  - kazakh
+  - almaty
+  - astana
+  - tokayev
+  - central asia
+  - uzbek
+  - kyrgyz
+  - caspian
+  - tenge
+  # Геополитика и конфликты
+  - war
+  - military
+  - troops
+  - strike
+  - missile
+  - conflict
+  - ceasefire
+  - coup
+  - nato
+  - united nations
+  - security council
+  - china
+  - beijing
+  - russia
+  - putin
+  - kremlin
+  - ukraine
+  - india
+  - pakistan
+  - africa
+  - venezuela
+  - taiwan
+  - korea
+  # Санкции, экономика, рынки
+  - sanction
+  - tariff
+  - trade war
+  - export control
+  - oil
+  - opec
+  - gas price
+  - inflation
+  - central bank
+  - interest rate
+  - recession
+  - imf
+  - world bank
+  - stock market
+  - economy
+  - economic
+  - currency
+  - default
+  # Технологии и ИИ
+  - artificial intelligence
+  - " ai "
+  - openai
+  - anthropic
+  - nvidia
+  - semiconductor
+  - chip
+  - data center
+  - crypto
+  - bitcoin
+  - blockchain
+  # Религия и мусульманский мир
+  - muslim
+  - islam
+  - mosque
+  - quran
+  - hajj
+  - umrah
+  - ramadan
+  - sharia
+  - uyghur
+  # Прочее из ваших тем
+  - election
+  - refugee
+  - migrant
+  - migration
+  - terror
+  - extremis
+  - space
+  - nasa
+  - climate
+  - summit
+  - treaty
+  - diplomat
+
+# ---------- ШАГ 2: ТОЧНЫЙ ФИЛЬТР ЧЕРЕЗ ИИ ----------
+# Приоритеты: 3 = присылать обязательно, 2 = если новость заметная,
+# 1 = только крупное событие, 0 = не присылать
 topics:
   "Ближневосточный конфликт (Израиль, Газа, Ливан, Иран)": 3
   "Внутренняя политика Казахстана": 3
@@ -87,15 +187,17 @@ topics:
   "Спорт": 1
   "Шоу-бизнес и культура": 1
 
-# Присылать крупные срочные новости (breaking news), даже если тема не из списка выше
 breaking_news: true
 
-# Что не присылать никогда
 never_send:
   - "материалы, продвигающие салафизм или религиозный экстремизм"
   - "светская хроника, сплетни о знаменитостях"
   - "реклама и промо-материалы"
 
-# Максимум новостей за один запуск (защита от спама при первом старте).
-# Поставьте 0, чтобы снять ограничение.
+# ---------- ЛИМИТЫ (защита от превышения бесплатного тарифа) ----------
+# Максимум обращений к Gemini за один запуск.
+# 12 запусков в сутки × 40 = 480 запросов, при лимите 1500 — с большим запасом.
+max_ai_calls_per_run: 40
+
+# Максимум отправленных сообщений за один запуск
 max_per_run: 25
