@@ -1,13 +1,16 @@
 """
-Персональный новостной бот.
+Персональный новостной бот (бесплатная версия на Google Gemini).
 
-Что делает:
-1. Читает Telegram-каналы (шлёт как есть) и мировые источники из config.yaml
-2. Мировые новости прогоняет через Claude: тот решает, подходит ли новость
-   под темы с их приоритетами, и если да — пишет краткий пересказ по-русски
-3. Отправляет в личный Telegram-бот, каждая новость отдельным сообщением,
-   внизу — ссылка на оригинал
-4. Отправленное запоминает в state.json, чтобы не дублировать
+Как работает:
+1. Telegram-каналы — присылаются как есть, без фильтра и без ИИ (бесплатно)
+2. Мировые новости проходят два этапа:
+   ШАГ 1 — бесплатный отсев по ключевым словам из config.yaml
+           (отсекает большую часть, не тратит лимиты)
+   ШАГ 2 — то, что прошло, идёт в Gemini: он решает, подходит ли новость
+           по темам, и пишет краткий пересказ на русском
+3. Отправка в личный Telegram-бот, каждая новость отдельным сообщением,
+   внизу ссылка на оригинал
+4. Отправленное запоминается в state.json, чтобы не дублировать
 
 Настройки — только в config.yaml.
 """
@@ -21,7 +24,6 @@ import requests
 import feedparser
 import yaml
 from bs4 import BeautifulSoup
-import anthropic
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.yaml")
 STATE_PATH = os.path.join(os.path.dirname(__file__), "state.json")
@@ -29,9 +31,13 @@ MAX_SEEN_ITEMS = 5000
 
 TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
-ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
+GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 
-client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+GEMINI_MODEL = "gemini-flash-latest"
+GEMINI_URL = (
+    f"https://generativelanguage.googleapis.com/v1beta/models/"
+    f"{GEMINI_MODEL}:generateContent"
+)
 
 
 def load_config():
@@ -75,7 +81,6 @@ def send_telegram(text):
 
 
 def fetch_telegram_channel(channel):
-    """Читает последние публичные посты канала через t.me/s/<channel>."""
     url = f"https://t.me/s/{channel}"
     try:
         resp = requests.get(url, timeout=20, headers={"User-Agent": "Mozilla/5.0"})
@@ -104,7 +109,7 @@ def fetch_telegram_channel(channel):
                 "link": link,
             }
         )
-    print(f"[КАНАЛ {channel}] получено постов: {len(items)}")
+    print(f"[КАНАЛ {channel}] постов: {len(items)}")
     return items
 
 
@@ -130,9 +135,9 @@ def fetch_rss(name, url):
             }
         )
     if not items:
-        print(f"[{name}] ВНИМАНИЕ: не получено ни одной записи (проверьте URL)")
+        print(f"[{name}] ВНИМАНИЕ: ноль записей (проверьте источник)")
     else:
-        print(f"[{name}] получено записей: {len(items)}")
+        print(f"[{name}] записей: {len(items)}")
     return items
 
 
@@ -141,16 +146,20 @@ def google_news_url(domain):
     return f"https://news.google.com/rss/search?q={q}&hl=en-US&gl=US&ceid=US:en"
 
 
-def build_filter_prompt(item, config):
+def passes_keywords(item, keywords):
+    """ШАГ 1 — бесплатный отсев. Без обращения к ИИ."""
+    haystack = f" {item['title']} {item['text']} ".lower()
+    return any(kw.lower() in haystack for kw in keywords)
+
+
+def build_prompt(item, config):
     topics_lines = "\n".join(
-        f"- {topic} (приоритет {weight})"
-        for topic, weight in config["topics"].items()
-        if weight > 0
+        f"- {t} (приоритет {w})" for t, w in config["topics"].items() if w > 0
     )
     never = "\n".join(f"- {x}" for x in config.get("never_send", []))
     breaking = (
-        "Также пропускай крупные срочные мировые новости (breaking news), "
-        "даже если они не попадают ни под одну тему."
+        "Также пропускай крупные срочные мировые новости, даже если они "
+        "не попадают ни под одну тему."
         if config.get("breaking_news")
         else ""
     )
@@ -160,10 +169,10 @@ def build_filter_prompt(item, config):
 НОВОСТЬ:
 Источник: {item['source']}
 Заголовок: {item['title']}
-Описание: {item['text'][:1500]}
+Описание: {item['text'][:1200]}
 
-ТЕМЫ ЧИТАТЕЛЯ (приоритет 3 = присылать обязательно, 2 = присылать если новость
-заметная, 1 = только если это крупное громкое событие):
+ТЕМЫ ЧИТАТЕЛЯ (3 = присылать обязательно, 2 = если новость заметная,
+1 = только если это крупное громкое событие):
 {topics_lines}
 
 НИКОГДА не пропускай:
@@ -172,31 +181,50 @@ def build_filter_prompt(item, config):
 {breaking}
 
 ЗАДАЧА:
-1. Реши, подходит ли новость читателю по правилам выше.
-2. Если подходит — напиши краткий пересказ НА РУССКОМ ЯЗЫКЕ: 2-3 предложения
-   своими словами, передающие суть. Не переводи дословно, не копируй фразы
-   из оригинала. Без вводных вроде «В статье говорится».
+1. Реши, подходит ли новость читателю.
+2. Если подходит — напиши краткий пересказ НА РУССКОМ: 2-3 предложения
+   своими словами, передающие суть. Не переводи дословно и не копируй
+   фразы из оригинала. Без вводных вроде «В статье говорится».
 
-Ответь СТРОГО в формате JSON, без markdown-разметки и без пояснений:
-{{"send": true/false, "topic": "название темы или BREAKING", "summary": "пересказ на русском"}}
+Ответь СТРОГО в формате JSON, без markdown и без пояснений:
+{{"send": true, "topic": "тема или BREAKING", "summary": "пересказ"}}
+Если новость не подходит: {{"send": false, "topic": "", "summary": ""}}"""
 
-Если send=false, поля topic и summary оставь пустыми строками."""
 
-
-def evaluate(item, config):
-    """Возвращает (нужно_ли_слать, тема, пересказ_по-русски)."""
+def ask_gemini(item, config):
+    """ШАГ 2 — точная проверка + пересказ. Возвращает (слать, тема, пересказ)."""
+    payload = {
+        "contents": [{"parts": [{"text": build_prompt(item, config)}]}],
+        "generationConfig": {"temperature": 0.2, "maxOutputTokens": 500},
+    }
     try:
-        resp = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=400,
-            messages=[{"role": "user", "content": build_filter_prompt(item, config)}],
+        resp = requests.post(
+            GEMINI_URL,
+            headers={
+                "Content-Type": "application/json",
+                "x-goog-api-key": GEMINI_API_KEY,
+            },
+            json=payload,
+            timeout=40,
         )
-        raw = resp.content[0].text.strip()
+        if resp.status_code == 429:
+            print("[GEMINI] превышен бесплатный лимит, пропускаю остальное")
+            return None
+        if not resp.ok:
+            print(f"[GEMINI] ошибка {resp.status_code}: {resp.text[:300]}")
+            return False, "", ""
+
+        data = resp.json()
+        raw = data["candidates"][0]["content"]["parts"][0]["text"].strip()
         raw = raw.replace("```json", "").replace("```", "").strip()
-        data = json.loads(raw)
-        return bool(data.get("send")), data.get("topic", ""), data.get("summary", "")
+        parsed = json.loads(raw)
+        return (
+            bool(parsed.get("send")),
+            parsed.get("topic", ""),
+            parsed.get("summary", ""),
+        )
     except Exception as e:
-        print(f"[ФИЛЬТР] ошибка на новости «{item['title'][:60]}»: {e}")
+        print(f"[GEMINI] сбой на «{item['title'][:60]}»: {e}")
         return False, "", ""
 
 
@@ -220,45 +248,61 @@ def main():
     seen = set(state["seen"])
     new_ids = []
     sent = 0
-    limit = config.get("max_per_run", 0) or 10**9
 
-    # --- Telegram-каналы: без фильтра ---
+    send_limit = config.get("max_per_run", 0) or 10**9
+    ai_limit = config.get("max_ai_calls_per_run", 40)
+    keywords = config.get("keywords", [])
+
+    # --- Telegram-каналы: без ИИ ---
     for channel in config.get("telegram_channels", []):
         for item in fetch_telegram_channel(channel):
-            if item["id"] in seen or sent >= limit:
+            if item["id"] in seen or sent >= send_limit:
                 continue
             if send_telegram(format_channel_message(item)):
                 sent += 1
             new_ids.append(item["id"])
             time.sleep(1)
 
-    # --- Мировые источники: фильтр + пересказ по-русски ---
+    # --- Мировые источники ---
     world_items = []
     for src in config.get("world_news_rss", []):
         world_items += fetch_rss(src["name"], src["url"])
     for src in config.get("google_news_sites", []):
         world_items += fetch_rss(src["name"], google_news_url(src["domain"]))
 
-    print(f"Всего мировых новостей получено: {len(world_items)}")
+    fresh = [i for i in world_items if i["id"] not in seen]
+    print(f"Мировых новостей всего: {len(world_items)}, из них новых: {len(fresh)}")
 
-    checked = 0
-    for item in world_items:
-        if item["id"] in seen:
-            continue
-        if sent >= limit:
+    # ШАГ 1 — бесплатный отсев
+    candidates = [i for i in fresh if passes_keywords(i, keywords)]
+    skipped = len(fresh) - len(candidates)
+    for item in fresh:
+        if item not in candidates:
+            new_ids.append(item["id"])
+    print(f"Отсеяно по ключевым словам без ИИ: {skipped}")
+    print(f"Пойдёт в Gemini: {min(len(candidates), ai_limit)}")
+
+    # ШАГ 2 — Gemini
+    ai_used = 0
+    for item in candidates:
+        if ai_used >= ai_limit or sent >= send_limit:
             break
-        checked += 1
-        ok, topic, summary = evaluate(item, config)
+        result = ask_gemini(item, config)
+        if result is None:  # исчерпан дневной лимит Gemini
+            break
+        ai_used += 1
         new_ids.append(item["id"])
+
+        ok, topic, summary = result
         if not ok or not summary:
             continue
         if send_telegram(format_world_message(item, topic, summary)):
             sent += 1
-        time.sleep(1)
+        time.sleep(4)  # не более ~15 запросов в минуту (бесплатный лимит)
 
     state["seen"] = state["seen"] + new_ids
     save_state(state)
-    print(f"Проверено новых мировых новостей: {checked}. Отправлено всего: {sent}")
+    print(f"Обращений к Gemini: {ai_used}. Отправлено сообщений: {sent}")
 
 
 if __name__ == "__main__":
