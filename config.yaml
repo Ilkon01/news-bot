@@ -1,68 +1,132 @@
 # =========================================================
 # КОНФИГ БОТА. Меняйте только этот файл.
-# Версия на бесплатном Google Gemini.
+# =========================================================
+#
+# У каждого источника три параметра:
+#   country — страна, показывается в подписи под новостью
+#   trust   — рейтинг доверия от 1 до 10. Когда одна и та же новость
+#             приходит из нескольких источников, бот пришлёт её только
+#             от того, у кого trust выше.
 # =========================================================
 
-# ---------- TELEGRAM-КАНАЛЫ ----------
-telegram_channels:
-  - atamekenbusiness
-  - headlines_geo
-  - forklogAI
-
-# ---------- МИРОВЫЕ ИСТОЧНИКИ ----------
 world_news_rss:
-  - name: "Al Jazeera"
-    url: "https://www.aljazeera.com/xml/rss/all.xml"
-  - name: "BBC World"
-    url: "http://feeds.bbci.co.uk/news/world/rss.xml"
-  - name: "BBC Business"
-    url: "http://feeds.bbci.co.uk/news/business/rss.xml"
-  - name: "Deutsche Welle"
-    url: "https://rss.dw.com/rdf/rss-en-world"
-  - name: "France 24"
-    url: "https://www.france24.com/en/rss"
-  - name: "The Guardian World"
-    url: "https://www.theguardian.com/world/rss"
+  # ---------- Крупнейшие мировые агентства (высшее доверие) ----------
   - name: "Reuters"
+    country: "Великобритания"
+    trust: 10
     url: "https://news.google.com/rss/search?q=site%3Areuters.com+when%3A1d&hl=en-US&gl=US&ceid=US:en"
   - name: "AP News"
+    country: "США"
+    trust: 10
     url: "https://news.google.com/rss/search?q=site%3Aapnews.com+when%3A1d&hl=en-US&gl=US&ceid=US:en"
+  - name: "BBC World"
+    country: "Великобритания"
+    trust: 9
+    url: "http://feeds.bbci.co.uk/news/world/rss.xml"
+  - name: "BBC Business"
+    country: "Великобритания"
+    trust: 9
+    url: "http://feeds.bbci.co.uk/news/business/rss.xml"
   - name: "Bloomberg"
+    country: "США"
+    trust: 9
     url: "https://news.google.com/rss/search?q=site%3Abloomberg.com+when%3A1d&hl=en-US&gl=US&ceid=US:en"
+
+  # ---------- Крупные международные вещатели ----------
+  - name: "Al Jazeera"
+    country: "Катар"
+    trust: 8
+    url: "https://www.aljazeera.com/xml/rss/all.xml"
+  - name: "Deutsche Welle"
+    country: "Германия"
+    trust: 8
+    url: "https://rss.dw.com/rdf/rss-en-world"
+  - name: "France 24"
+    country: "Франция"
+    trust: 8
+    url: "https://www.france24.com/en/rss"
+  - name: "The Guardian"
+    country: "Великобритания"
+    trust: 8
+    url: "https://www.theguardian.com/world/rss"
+  - name: "Nikkei Asia"
+    country: "Япония"
+    trust: 8
+    url: "https://news.google.com/rss/search?q=site%3Aasia.nikkei.com+when%3A1d&hl=en-US&gl=US&ceid=US:en"
+  - name: "South China Morning Post"
+    country: "Гонконг"
+    trust: 7
+    url: "https://news.google.com/rss/search?q=site%3Ascmp.com+when%3A1d&hl=en-US&gl=US&ceid=US:en"
+
+  # ---------- Ближний Восток ----------
   - name: "Al Arabiya"
+    country: "ОАЭ"
+    trust: 6
     url: "https://news.google.com/rss/search?q=site%3Aenglish.alarabiya.net+when%3A1d&hl=en-US&gl=US&ceid=US:en"
   - name: "Middle East Eye"
+    country: "Великобритания"
+    trust: 6
     url: "https://news.google.com/rss/search?q=site%3Amiddleeasteye.net+when%3A1d&hl=en-US&gl=US&ceid=US:en"
   - name: "Anadolu Agency"
+    country: "Турция"
+    trust: 6
     url: "https://news.google.com/rss/search?q=site%3Aaa.com.tr+when%3A1d&hl=en-US&gl=US&ceid=US:en"
-  - name: "South China Morning Post"
-    url: "https://news.google.com/rss/search?q=site%3Ascmp.com+when%3A1d&hl=en-US&gl=US&ceid=US:en"
-  - name: "Nikkei Asia"
-    url: "https://news.google.com/rss/search?q=site%3Aasia.nikkei.com+when%3A1d&hl=en-US&gl=US&ceid=US:en"
-  - name: "Tengrinews"
-    url: "https://news.google.com/rss/search?q=site%3Atengrinews.kz+when%3A1d&hl=en-US&gl=US&ceid=US:en"
-  - name: "Astana Times"
-    url: "https://news.google.com/rss/search?q=site%3Aastanatimes.com+when%3A1d&hl=en-US&gl=US&ceid=US:en"
-  - name: "Kursiv"
-    url: "https://news.google.com/rss/search?q=site%3Akursiv.media+when%3A1d&hl=en-US&gl=US&ceid=US:en"
+
+  # ---------- Казахстан и Центральная Азия ----------
   - name: "Eurasianet"
+    country: "США"
+    trust: 8
     url: "https://news.google.com/rss/search?q=site%3Aeurasianet.org+when%3A1d&hl=en-US&gl=US&ceid=US:en"
+  - name: "Kursiv"
+    country: "Казахстан"
+    trust: 7
+    url: "https://news.google.com/rss/search?q=site%3Akursiv.media+when%3A1d&hl=en-US&gl=US&ceid=US:en"
+  - name: "Astana Times"
+    country: "Казахстан"
+    trust: 7
+    url: "https://news.google.com/rss/search?q=site%3Aastanatimes.com+when%3A1d&hl=en-US&gl=US&ceid=US:en"
+  - name: "Tengrinews"
+    country: "Казахстан"
+    trust: 6
+    url: "https://news.google.com/rss/search?q=site%3Atengrinews.kz+when%3A1d&hl=en-US&gl=US&ceid=US:en"
+  - name: "Atameken Business"
+    country: "Казахстан"
+    trust: 7
+    url: "https://inbusiness.kz/rss"
+  # Запасной вариант для Atameken на случай, если прямая лента не работает.
+  # Если в логе строка выше даёт «ноль записей», а эта работает — оставьте
+  # только эту, а верхнюю удалите (и наоборот).
+  - name: "Atameken Business"
+    country: "Казахстан"
+    trust: 7
+    url: "https://news.google.com/rss/search?q=site%3Ainbusiness.kz+when%3A1d&hl=ru&gl=KZ&ceid=KZ:ru"
   - name: "Казахстан (все источники)"
+    country: "Казахстан"
+    trust: 5
     url: "https://news.google.com/rss/search?q=Kazakhstan+when%3A1d&hl=ru&gl=KZ&ceid=KZ:ru"
+
+  # ---------- Криптовалюта и технологии ----------
+  - name: "ForkLog"
+    country: "Россия"
+    trust: 6
+    url: "https://forklog.com/feed/"
+
+  # ---------- Общие подборки Google News ----------
   - name: "Мир (Google News)"
+    country: "разные"
+    trust: 4
     url: "https://news.google.com/rss/headlines/section/topic/WORLD?hl=en-US&gl=US&ceid=US:en"
   - name: "Экономика (Google News)"
+    country: "разные"
+    trust: 4
     url: "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-US&gl=US&ceid=US:en"
 
 # ---------- ШАГ 1: ТОЛЬКО СВЕЖЕЕ ----------
-# Новости старше этого числа часов не рассматриваются вообще.
-# При запуске раз в 2 часа значение 4 даёт запас на случай пропуска запуска.
 max_age_hours: 4
 
 # ---------- ШАГ 2: ОТСЕВ ПО СЛОВАМ ----------
 # Слово ищется целиком (war не поймает warning).
-# Звёздочка в конце = совпадение по началу слова: санкц* поймает
-# «санкции», «санкционный». Пишите слова в нижнем регистре.
+# Звёздочка в конце = совпадение по началу слова: санкц* поймает «санкции».
 keywords:
   # Ближний Восток
   - israel
@@ -82,7 +146,7 @@ keywords:
   - erdogan
   - израил*
   - газа
-  - иран
+  - иран*
   - сири*
   # Казахстан и Центральная Азия
   - kazakh*
@@ -163,6 +227,7 @@ keywords:
   - криптовалют*
   - биткоин
   - искусственн*
+  - нейросет*
   # Религия и мусульманский мир
   - muslim*
   - islam
@@ -196,7 +261,17 @@ keywords:
   - беженц*
   - терроризм
 
-# ---------- ШАГ 3: ТОЧНЫЙ ФИЛЬТР ЧЕРЕЗ ИИ ----------
+# ---------- ШАГ 3: ДЕДУПЛИКАЦИЯ ----------
+# Насколько похожими должны быть заголовки, чтобы считаться одной новостью.
+# 0.5 = совпадает половина значимых слов. Меньше — строже склеивает
+# (риск потерять разные новости), больше — мягче (риск дублей).
+duplicate_threshold: 0.5
+
+# Сколько часов помнить отправленные заголовки, чтобы не прислать
+# ту же новость в следующем запуске от другого источника
+duplicate_memory_hours: 48
+
+# ---------- ШАГ 4: ТОЧНЫЙ ФИЛЬТР ЧЕРЕЗ ИИ ----------
 topics:
   "Ближневосточный конфликт (Израиль, Газа, Ливан, Иран)": 3
   "Внутренняя политика Казахстана": 3
@@ -221,8 +296,6 @@ topics:
 
 breaking_news: true
 
-# ---------- ЭМОДЗИ ДЛЯ ОФОРМЛЕНИЯ ----------
-# Названия слева должны в точности совпадать с темами выше.
 topic_emoji:
   "Ближневосточный конфликт (Израиль, Газа, Ливан, Иран)": "🕌"
   "Внутренняя политика Казахстана": "🇰🇿"
@@ -246,7 +319,6 @@ topic_emoji:
   "Шоу-бизнес и культура": "🎭"
   "BREAKING": "🔴"
   _default: "📰"
-  _channel: "💬"
 
 never_send:
   - "материалы, продвигающие салафизм или религиозный экстремизм"
@@ -255,12 +327,6 @@ never_send:
   - "криминальная хроника местного значения"
 
 # ---------- ЛИМИТЫ ----------
-# Обращений к Gemini за один запуск. 12 запусков в сутки × 30 = 360,
-# при бесплатном лимите ~1000-1500 в сутки это с запасом.
 max_ai_calls_per_run: 30
-
-# Пауза между обращениями к Gemini, секунд (защита от лимита в минуту)
 seconds_between_ai_calls: 5
-
-# Максимум отправленных сообщений за запуск
 max_per_run: 20
