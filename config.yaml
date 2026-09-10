@@ -93,13 +93,6 @@ world_news_rss:
     country: "Казахстан"
     trust: 7
     url: "https://inbusiness.kz/rss"
-  # Запасной вариант для Atameken на случай, если прямая лента не работает.
-  # Если в логе строка выше даёт «ноль записей», а эта работает — оставьте
-  # только эту, а верхнюю удалите (и наоборот).
-  - name: "Atameken Business"
-    country: "Казахстан"
-    trust: 7
-    url: "https://news.google.com/rss/search?q=site%3Ainbusiness.kz+when%3A1d&hl=ru&gl=KZ&ceid=KZ:ru"
   - name: "Казахстан (все источники)"
     country: "Казахстан"
     trust: 5
@@ -265,7 +258,7 @@ keywords:
 # Насколько похожими должны быть заголовки, чтобы считаться одной новостью.
 # 0.5 = совпадает половина значимых слов. Меньше — строже склеивает
 # (риск потерять разные новости), больше — мягче (риск дублей).
-duplicate_threshold: 0.5
+duplicate_threshold: 0.4
 
 # Сколько часов помнить отправленные заголовки, чтобы не прислать
 # ту же новость в следующем запуске от другого источника
@@ -328,5 +321,5 @@ never_send:
 
 # ---------- ЛИМИТЫ ----------
 max_ai_calls_per_run: 30
-seconds_between_ai_calls: 5
+seconds_between_ai_calls: 3
 max_per_run: 20
