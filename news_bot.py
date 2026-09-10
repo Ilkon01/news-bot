@@ -33,11 +33,19 @@ TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 
-GEMINI_MODEL = "gemini-flash-lite-latest"
-GEMINI_URL = (
-    f"https://generativelanguage.googleapis.com/v1beta/models/"
-    f"{GEMINI_MODEL}:generateContent"
-)
+# Модели пробуются по порядку: если первая перегружена, сразу берётся вторая.
+GEMINI_MODELS = [
+    "gemini-flash-lite-latest",
+    "gemini-flash-latest",
+    "gemini-2.0-flash",
+]
+
+
+def gemini_url(model):
+    return (
+        f"https://generativelanguage.googleapis.com/v1beta/models/"
+        f"{model}:generateContent"
+    )
 
 RESPONSE_SCHEMA = {
     "type": "OBJECT",
@@ -274,6 +282,8 @@ def build_prompt(item, config):
 
 
 def ask_gemini(item, config):
+    """Спрашивает Gemini. Если модель перегружена — пробует следующую.
+    Возвращает словарь, {} при сбое, None если исчерпан дневной лимит."""
     payload = {
         "contents": [{"parts": [{"text": build_prompt(item, config)}]}],
         "generationConfig": {
@@ -285,40 +295,39 @@ def ask_gemini(item, config):
     }
     headers = {"Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY}
 
-    for attempt in range(3):
-        try:
-            resp = requests.post(GEMINI_URL, headers=headers, json=payload, timeout=45)
-        except Exception as e:
-            print(f"[GEMINI] сеть: {e}")
-            time.sleep(5)
-            continue
+    for model in GEMINI_MODELS:
+        for attempt in range(2):
+            try:
+                resp = requests.post(
+                    gemini_url(model), headers=headers, json=payload, timeout=30
+                )
+            except Exception as e:
+                print(f"[GEMINI/{model}] сеть: {type(e).__name__}")
+                break  # к следующей модели
 
-        if resp.status_code == 503:
-            wait = 10 * (attempt + 1)
-            print(f"[GEMINI] перегрузка, жду {wait}с (попытка {attempt + 1}/3)")
-            time.sleep(wait)
-            continue
+            if resp.status_code == 503:
+                if attempt == 0:
+                    time.sleep(5)
+                    continue
+                print(f"[GEMINI/{model}] перегружена, пробую следующую модель")
+                break
 
-        if resp.status_code == 429:
-            if attempt < 2:
-                print("[GEMINI] слишком часто, жду 30с")
-                time.sleep(30)
-                continue
-            print("[GEMINI] дневной лимит исчерпан, останавливаюсь")
-            return None
+            if resp.status_code == 429:
+                print(f"[GEMINI/{model}] лимит модели исчерпан, пробую следующую")
+                break
 
-        if not resp.ok:
-            print(f"[GEMINI] ошибка {resp.status_code}: {resp.text[:200]}")
-            return {}
+            if not resp.ok:
+                print(f"[GEMINI/{model}] ошибка {resp.status_code}: {resp.text[:150]}")
+                break
 
-        try:
-            raw = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
-            return json.loads(raw)
-        except Exception as e:
-            print(f"[GEMINI] не разобрал ответ на «{item['title'][:50]}»: {e}")
-            return {}
+            try:
+                raw = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+                return json.loads(raw)
+            except Exception as e:
+                print(f"[GEMINI/{model}] не разобрал ответ: {e}")
+                return {}
 
-    print("[GEMINI] три попытки не удались, пропускаю новость")
+    print(f"[GEMINI] все модели недоступны, пропускаю «{item['title'][:45]}»")
     return {}
 
 
