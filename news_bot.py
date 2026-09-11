@@ -52,10 +52,11 @@ RESPONSE_SCHEMA = {
     "properties": {
         "send": {"type": "BOOLEAN"},
         "topic": {"type": "STRING"},
+        "country": {"type": "STRING"},
         "title_ru": {"type": "STRING"},
         "summary": {"type": "STRING"},
     },
-    "required": ["send", "topic", "title_ru", "summary"],
+    "required": ["send", "topic", "country", "title_ru", "summary"],
 }
 
 # Служебные слова, которые не участвуют в сравнении заголовков
@@ -251,6 +252,17 @@ def build_prompt(item, config):
         else ""
     )
 
+    strict = ""
+    if item["source"] in config.get("strict_sources", []):
+        strict = (
+            "\nОСОБОЕ УКАЗАНИЕ ПО ЭТОМУ ИСТОЧНИКУ: он склонен к тенденциозной "
+            "подаче и продвижению определённой позиции. Будь к нему намного "
+            "строже обычного. Пропускай ТОЛЬКО сообщения о конкретных "
+            "свершившихся фактах и событиях. Отклоняй (send: false) аналитику, "
+            "колонки, мнения, прогнозы, а также материалы с оценочной или "
+            "агитационной риторикой.\n"
+        )
+
     return f"""Ты — персональный новостной фильтр и редактор.
 
 НОВОСТЬ:
@@ -266,15 +278,19 @@ def build_prompt(item, config):
 {never}
 
 {breaking}
-
+{strict}
 Будь строгим: если новость проходная, местечковая или интересна только
 жителям одной страны и не входит в темы — send: false.
 
 ЗАДАЧА:
 1. Реши, подходит ли новость.
 2. topic — ровно одно название темы из списка выше, либо BREAKING.
-3. title_ru — заголовок на русском, до 10 слов, без точки в конце.
-4. summary — пересказ на русском, 2-3 предложения своими словами.
+3. country — страна ИЛИ регион, ГДЕ ПРОИСХОДИТ СОБЫТИЕ, по-русски.
+   Это НЕ страна издания. Примеры: «Израиль», «США», «Казахстан»,
+   «Газа», «Китай». Если событие охватывает несколько стран — укажите
+   главную или регион: «Ближний Восток», «ЕС», «Мир».
+4. title_ru — заголовок на русском, до 10 слов, без точки в конце.
+5. summary — пересказ на русском, 2-3 предложения своими словами.
    Не переводи дословно, не копируй фразы из оригинала, без вводных
    вроде «В статье говорится» и без упоминания названия издания.
 
@@ -344,8 +360,9 @@ def format_message(item, data, emoji_map):
     summary = esc(data.get("summary", "")).strip()
 
     signature = f"<i>{esc(item['source'])}</i>"
-    if item.get("country"):
-        signature += f"  ·  {esc(item['country'])}"
+    event_country = (data.get("country") or "").strip()
+    if event_country:
+        signature += f"  ·  {esc(event_country)}"
     signature += f"  ·  <a href=\"{esc(item['link'])}\">Читать оригинал</a>"
 
     head = f"{emoji} <b>{title}</b>" if title else f"{emoji} <b>{esc(topic)}</b>"
