@@ -2,115 +2,93 @@
 # КОНФИГ БОТА. Меняйте только этот файл.
 # =========================================================
 #
-# У каждого источника три параметра:
-#   country — страна, показывается в подписи под новостью
-#   trust   — рейтинг доверия от 1 до 10. Когда одна и та же новость
-#             приходит из нескольких источников, бот пришлёт её только
-#             от того, у кого trust выше.
+# У каждого источника есть trust — рейтинг доверия от 1 до 10.
+# Когда одна и та же новость приходит из нескольких источников, бот
+# пришлёт её только от того, у кого trust выше.
+#
+# Страна в подписи под новостью — это страна СОБЫТИЯ, её определяет ИИ
+# по содержанию статьи, а не страна издания.
 # =========================================================
 
 world_news_rss:
   # ---------- Крупнейшие мировые агентства (высшее доверие) ----------
   - name: "Reuters"
-    country: "Великобритания"
     trust: 10
     url: "https://news.google.com/rss/search?q=site%3Areuters.com+when%3A1d&hl=en-US&gl=US&ceid=US:en"
   - name: "AP News"
-    country: "США"
     trust: 10
     url: "https://news.google.com/rss/search?q=site%3Aapnews.com+when%3A1d&hl=en-US&gl=US&ceid=US:en"
   - name: "BBC World"
-    country: "Великобритания"
     trust: 9
     url: "http://feeds.bbci.co.uk/news/world/rss.xml"
   - name: "BBC Business"
-    country: "Великобритания"
     trust: 9
     url: "http://feeds.bbci.co.uk/news/business/rss.xml"
   - name: "Bloomberg"
-    country: "США"
     trust: 9
     url: "https://news.google.com/rss/search?q=site%3Abloomberg.com+when%3A1d&hl=en-US&gl=US&ceid=US:en"
 
   # ---------- Крупные международные вещатели ----------
   - name: "Al Jazeera"
-    country: "Катар"
     trust: 8
     url: "https://www.aljazeera.com/xml/rss/all.xml"
   - name: "Deutsche Welle"
-    country: "Германия"
     trust: 8
     url: "https://rss.dw.com/rdf/rss-en-world"
   - name: "France 24"
-    country: "Франция"
-    trust: 8
+    trust: 6
     url: "https://www.france24.com/en/rss"
   - name: "The Guardian"
-    country: "Великобритания"
     trust: 8
     url: "https://www.theguardian.com/world/rss"
   - name: "Nikkei Asia"
-    country: "Япония"
     trust: 8
     url: "https://news.google.com/rss/search?q=site%3Aasia.nikkei.com+when%3A1d&hl=en-US&gl=US&ceid=US:en"
   - name: "South China Morning Post"
-    country: "Гонконг"
     trust: 7
     url: "https://news.google.com/rss/search?q=site%3Ascmp.com+when%3A1d&hl=en-US&gl=US&ceid=US:en"
 
   # ---------- Ближний Восток ----------
   - name: "Al Arabiya"
-    country: "ОАЭ"
     trust: 6
     url: "https://news.google.com/rss/search?q=site%3Aenglish.alarabiya.net+when%3A1d&hl=en-US&gl=US&ceid=US:en"
   - name: "Middle East Eye"
-    country: "Великобритания"
     trust: 6
     url: "https://news.google.com/rss/search?q=site%3Amiddleeasteye.net+when%3A1d&hl=en-US&gl=US&ceid=US:en"
   - name: "Anadolu Agency"
-    country: "Турция"
     trust: 6
     url: "https://news.google.com/rss/search?q=site%3Aaa.com.tr+when%3A1d&hl=en-US&gl=US&ceid=US:en"
 
   # ---------- Казахстан и Центральная Азия ----------
   - name: "Eurasianet"
-    country: "США"
     trust: 8
     url: "https://news.google.com/rss/search?q=site%3Aeurasianet.org+when%3A1d&hl=en-US&gl=US&ceid=US:en"
   - name: "Kursiv"
-    country: "Казахстан"
     trust: 7
     url: "https://news.google.com/rss/search?q=site%3Akursiv.media+when%3A1d&hl=en-US&gl=US&ceid=US:en"
   - name: "Astana Times"
-    country: "Казахстан"
     trust: 7
     url: "https://news.google.com/rss/search?q=site%3Aastanatimes.com+when%3A1d&hl=en-US&gl=US&ceid=US:en"
   - name: "Tengrinews"
-    country: "Казахстан"
     trust: 6
     url: "https://news.google.com/rss/search?q=site%3Atengrinews.kz+when%3A1d&hl=en-US&gl=US&ceid=US:en"
   - name: "Atameken Business"
-    country: "Казахстан"
     trust: 7
     url: "https://inbusiness.kz/rss"
   - name: "Казахстан (все источники)"
-    country: "Казахстан"
     trust: 5
     url: "https://news.google.com/rss/search?q=Kazakhstan+when%3A1d&hl=ru&gl=KZ&ceid=KZ:ru"
 
   # ---------- Криптовалюта и технологии ----------
   - name: "ForkLog"
-    country: "Россия"
     trust: 6
     url: "https://forklog.com/feed/"
 
   # ---------- Общие подборки Google News ----------
   - name: "Мир (Google News)"
-    country: "разные"
     trust: 4
     url: "https://news.google.com/rss/headlines/section/topic/WORLD?hl=en-US&gl=US&ceid=US:en"
   - name: "Экономика (Google News)"
-    country: "разные"
     trust: 4
     url: "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-US&gl=US&ceid=US:en"
 
@@ -312,6 +290,14 @@ topic_emoji:
   "Шоу-бизнес и культура": "🎭"
   "BREAKING": "🔴"
   _default: "📰"
+
+# ---------- СТРОГИЕ ИСТОЧНИКИ ----------
+# Для перечисленных здесь изданий ИИ пропускает ТОЛЬКО сообщения о
+# конкретных свершившихся фактах. Аналитика, колонки, прогнозы и
+# материалы с оценочной риторикой отклоняются.
+# Добавляйте сюда любой источник, чья подача вам не нравится.
+strict_sources:
+  - "France 24"
 
 never_send:
   - "материалы, продвигающие салафизм или религиозный экстремизм"
