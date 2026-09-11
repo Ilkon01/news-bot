@@ -30,6 +30,7 @@ STATE_PATH = os.path.join(os.path.dirname(__file__), "state.json")
 MAX_SEEN_ITEMS = 8000
 
 TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
+# Куда слать: личный chat_id или канал (@имя_канала либо -100...)
 TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 
@@ -69,6 +70,8 @@ STOPWORDS = {
     "и", "в", "во", "на", "с", "со", "по", "за", "из", "от", "до", "к", "у",
     "о", "об", "для", "что", "как", "это", "не", "но", "а", "же", "бы", "ли",
     "он", "она", "они", "его", "её", "их", "был", "была", "были", "будет",
+    "также", "более", "свою", "этом", "который", "которые", "после", "может",
+    "года", "году", "результате", "заявил", "сообщил", "стало", "стали",
 }
 
 
@@ -84,7 +87,8 @@ def load_state():
     else:
         state = {}
     state.setdefault("seen", [])
-    state.setdefault("recent", [])  # [{"tokens": [...], "ts": epoch}]
+    state.setdefault("recent", [])     # оригинальные заголовки
+    state.setdefault("recent_ru", [])  # русские заголовки после перевода
     return state
 
 
@@ -92,6 +96,7 @@ def save_state(state, memory_hours):
     state["seen"] = state["seen"][-MAX_SEEN_ITEMS:]
     cutoff = time.time() - memory_hours * 3600
     state["recent"] = [r for r in state["recent"] if r.get("ts", 0) > cutoff]
+    state["recent_ru"] = [r for r in state["recent_ru"] if r.get("ts", 0) > cutoff]
     with open(STATE_PATH, "w", encoding="utf-8") as f:
         json.dump(state, f, ensure_ascii=False, indent=2)
 
@@ -190,12 +195,18 @@ def passes_keywords(item, patterns):
 
 # ---------- Дедупликация ----------
 
+def stem(word):
+    """Грубая обрезка до основы: «израильской» и «израильская» → «израил».
+    Нужна, чтобы русские окончания не мешали сравнению."""
+    return word[:6] if len(word) > 6 else word
+
+
 def title_tokens(title):
     """Значимые слова заголовка для сравнения."""
     # убираем хвост вроде " - Reuters", который добавляет Google News
     title = re.sub(r"\s+[-–|]\s+[^-–|]{2,30}$", "", title)
     words = re.findall(r"[a-zA-Zа-яА-ЯёЁ0-9]+", title.lower())
-    return {w for w in words if len(w) > 2 and w not in STOPWORDS}
+    return {stem(w) for w in words if len(w) > 2 and w not in STOPWORDS}
 
 
 def similarity(tokens_a, tokens_b):
@@ -204,6 +215,19 @@ def similarity(tokens_a, tokens_b):
         return 0.0
     common = len(tokens_a & tokens_b)
     return common / min(len(tokens_a), len(tokens_b))
+
+
+def is_repeat_ru(data, recent_ru, threshold):
+    """Сравнивает русский заголовок+пересказ с уже отправленными."""
+    tokens = title_tokens(
+        f"{data.get('title_ru', '')} {data.get('summary', '')[:200]}"
+    )
+    if not tokens:
+        return False, set()
+    for r in recent_ru:
+        if similarity(tokens, set(r["tokens"])) >= threshold:
+            return True, tokens
+    return False, tokens
 
 
 def deduplicate(items, threshold, recent):
@@ -353,20 +377,40 @@ def esc(text):
     return html.escape(str(text or ""), quote=False)
 
 
-def format_message(item, data, emoji_map):
+def make_hashtag(text):
+    """Превращает «Санкции и торговые войны» в #санкции_и_торговые_войны."""
+    text = re.sub(r"\([^)]*\)", "", text)          # убрать скобки
+    text = re.sub(r"[^\w\s]", "", text, flags=re.U)  # убрать знаки
+    words = text.lower().split()
+    if not words:
+        return ""
+    return "#" + "_".join(words[:4])
+
+
+def format_message(item, data, emoji_map, show_hashtags=True):
     topic = data.get("topic", "")
     emoji = emoji_map.get(topic, emoji_map.get("_default", "📰"))
     title = esc(data.get("title_ru", "")).strip()
     summary = esc(data.get("summary", "")).strip()
-
-    signature = f"<i>{esc(item['source'])}</i>"
-    event_country = (data.get("country") or "").strip()
-    if event_country:
-        signature += f"  ·  {esc(event_country)}"
-    signature += f"  ·  <a href=\"{esc(item['link'])}\">Читать оригинал</a>"
+    country = (data.get("country") or "").strip()
 
     head = f"{emoji} <b>{title}</b>" if title else f"{emoji} <b>{esc(topic)}</b>"
-    return f"{head}\n\n{summary}\n\n{signature}"
+
+    signature = f"<i>{esc(item['source'])}</i>"
+    if country:
+        signature += f"  ·  {esc(country)}"
+    signature += f"  ·  <a href=\"{esc(item['link'])}\">Читать оригинал</a>"
+
+    parts = [head, "", summary, ""]
+
+    if show_hashtags:
+        tags = [t for t in (make_hashtag(topic), make_hashtag(country)) if t]
+        if tags:
+            parts.append(esc(" ".join(tags)))
+            parts.append("")
+
+    parts.append(signature)
+    return "\n".join(parts)
 
 
 # ---------- Основной цикл ----------
@@ -385,7 +429,9 @@ def main():
     pause = config.get("seconds_between_ai_calls", 5)
     threshold = config.get("duplicate_threshold", 0.5)
     emoji_map = config.get("topic_emoji", {})
+    show_tags = config.get("show_hashtags", True)
     patterns = build_keyword_patterns(config.get("keywords", []))
+    ru_dups = 0
 
     # Сбор
     items = []
@@ -436,18 +482,32 @@ def main():
             break
 
         new_ids.append(item["id"])
+
         if data.get("send") and data.get("summary"):
-            if send_telegram(format_message(item, data, emoji_map)):
-                sent += 1
-                state["recent"].append(
-                    {"tokens": sorted(item["tokens"]), "ts": time.time()}
-                )
+            # второй этап склейки — уже по русскому тексту
+            repeat, ru_tokens = is_repeat_ru(data, state["recent_ru"], threshold)
+            if repeat:
+                ru_dups += 1
+                print(f"  дубль по смыслу, не шлю: «{data.get('title_ru','')[:50]}»")
+            else:
+                if send_telegram(format_message(item, data, emoji_map, show_tags)):
+                    sent += 1
+                    state["recent"].append(
+                        {"tokens": sorted(item["tokens"]), "ts": time.time()}
+                    )
+                    state["recent_ru"].append(
+                        {"tokens": sorted(ru_tokens), "ts": time.time()}
+                    )
 
         time.sleep(pause)
 
     state["seen"] = state["seen"] + new_ids
     save_state(state, memory_hours)
-    print(f"Обращений к Gemini: {ai_used}. Отправлено сообщений: {sent}")
+    print(
+        f"Обращений к Gemini: {ai_used}. "
+        f"Отсеяно как дубль после перевода: {ru_dups}. "
+        f"Отправлено сообщений: {sent}"
+    )
 
 
 if __name__ == "__main__":
