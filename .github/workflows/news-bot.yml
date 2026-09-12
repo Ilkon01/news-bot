@@ -2,7 +2,7 @@ name: News bot
 
 on:
   schedule:
-    - cron: '0 */2 * * *'    # каждые 2 часа (экономит бесплатный лимит Gemini)
+    - cron: '0 * * * *'      # каждый час
   workflow_dispatch: {}       # позволяет запустить вручную кнопкой
 
 jobs:
