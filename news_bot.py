@@ -154,13 +154,31 @@ def fetch_rss(src):
         link = entry.get("link", "")
         if not link:
             continue
+
+        title = entry.get("title", "")
+        real_source = name
+        # У сводных лент Google News настоящий издатель лежит в поле source,
+        # а в конце заголовка идёт хвост вида « - Reuters». Достаём и то, и то.
+        src_field = entry.get("source")
+        if isinstance(src_field, dict):
+            publisher = (src_field.get("title") or "").strip()
+            if publisher:
+                real_source = publisher
+        if real_source == name:
+            m = re.search(r"\s+-\s+([^-]{2,40})$", title)
+            if m:
+                real_source = m.group(1).strip()
+        # убираем хвост с издателем из самого заголовка
+        title = re.sub(r"\s+-\s+[^-]{2,40}$", "", title).strip()
+
         items.append(
             {
                 "id": link,
-                "source": name,
+                "source": real_source,
+                "feed": name,
                 "country": src.get("country", ""),
                 "trust": src.get("trust", 5),
-                "title": entry.get("title", ""),
+                "title": title,
                 "text": clean_html(entry.get("summary", "")),
                 "link": link,
                 "age_hours": entry_age_hours(entry),
@@ -284,7 +302,8 @@ def build_prompt(item, config):
         else ""
     )
 
-    detail_len = config.get("detail_length", "3-5 предложений")
+    detail_len = config.get("detail_length", "4-6 предложений")
+    lead_max = config.get("lead_max_chars", 140)
 
     strict = ""
     if item["source"] in config.get("strict_sources", []):
@@ -333,10 +352,11 @@ def build_prompt(item, config):
    ВАЖНО — значимое развитие событий по темам приоритета 3.
    ОБЫЧНО — всё остальное, что всё же стоит прочитать.
 5. title_ru — заголовок на русском, до 10 слов, без точки в конце.
-6. lead — САМОЕ ГЛАВНОЕ в 2-3 предложениях. Читатель по ним решает,
-   читать дальше или пролистать. Здесь: что произошло, где, с кем,
-   и главная цифра или факт. Никакой предыстории и никаких деталей,
-   только суть.
+6. lead — САМОЕ ГЛАВНОЕ, СТРОГО НЕ ДЛИННЕЕ {lead_max} ЗНАКОВ вместе
+   с пробелами. Это примерно два коротких предложения. Читатель по ним
+   решает, читать дальше или пролистать. Здесь: что произошло, где,
+   с кем, и главная цифра. Никакой предыстории, никаких деталей,
+   никаких оценок. Уложись в лимит — это обязательное требование.
 7. detail — продолжение для тех, кто заинтересовался: {detail_len}.
    Здесь: подробности, предыстория, контекст, реакция сторон,
    последствия. НЕ повторяй то, что уже сказано в lead.
@@ -400,6 +420,37 @@ def ask_gemini(item, config):
 
 # ---------- Оформление ----------
 
+def fit_lead(lead, detail, max_chars):
+    """Подгоняет лид под заданную длину. Лишние предложения переносит
+    в начало раскрывающейся части, чтобы текст не обрывался на полуслове."""
+    lead = (lead or "").strip()
+    detail = (detail or "").strip()
+    if len(lead) <= max_chars:
+        return lead, detail
+
+    # режем по границам предложений
+    sentences = re.split(r"(?<=[.!?…])\s+", lead)
+    kept, moved = [], []
+    used = 0
+    for s in sentences:
+        if not kept or used + len(s) + 1 <= max_chars:
+            kept.append(s)
+            used += len(s) + 1
+        else:
+            moved.append(s)
+
+    new_lead = " ".join(kept).strip()
+
+    # если даже одно предложение длиннее лимита — обрезаем по слову
+    if len(new_lead) > max_chars:
+        cut = new_lead[:max_chars].rsplit(" ", 1)[0].rstrip(" ,;:—-")
+        moved.insert(0, new_lead[len(cut):].strip())
+        new_lead = cut + "…"
+
+    new_detail = (" ".join(moved).strip() + " " + detail).strip()
+    return new_lead, new_detail
+
+
 def esc(text):
     return html.escape(str(text or ""), quote=False)
 
@@ -414,12 +465,15 @@ def make_hashtag(text):
     return "#" + "_".join(words[:4])
 
 
-def format_message(item, data, emoji_map, show_hashtags=True):
+def format_message(item, data, emoji_map, show_hashtags=True, lead_max=140):
     topic = data.get("topic", "")
     emoji = emoji_map.get(topic, emoji_map.get("_default", "📰"))
     title = esc(data.get("title_ru", "")).strip()
-    lead = esc(data.get("lead", "")).strip()
-    detail = esc(data.get("detail", "")).strip()
+    raw_lead, raw_detail = fit_lead(
+        data.get("lead", ""), data.get("detail", ""), lead_max
+    )
+    lead = esc(raw_lead)
+    detail = esc(raw_detail)
     country = (data.get("country") or "").strip()
     importance = (data.get("importance") or "").strip().upper()
 
@@ -484,6 +538,7 @@ def main():
     threshold = config.get("duplicate_threshold", 0.5)
     emoji_map = config.get("topic_emoji", {})
     show_tags = config.get("show_hashtags", True)
+    lead_max = config.get("lead_max_chars", 140)
     patterns = build_keyword_patterns(config.get("keywords", []))
     ru_dups = 0
 
@@ -544,7 +599,7 @@ def main():
                 ru_dups += 1
                 print(f"  дубль по смыслу, не шлю: «{data.get('title_ru','')[:50]}»")
             else:
-                if send_telegram(format_message(item, data, emoji_map, show_tags)):
+                if send_telegram(format_message(item, data, emoji_map, show_tags, lead_max)):
                     sent += 1
                     state["recent"].append(
                         {"tokens": sorted(item["tokens"]), "ts": time.time()}
