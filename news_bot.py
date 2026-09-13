@@ -56,9 +56,12 @@ RESPONSE_SCHEMA = {
         "country": {"type": "STRING"},
         "importance": {"type": "STRING"},
         "title_ru": {"type": "STRING"},
-        "summary": {"type": "STRING"},
+        "lead": {"type": "STRING"},
+        "detail": {"type": "STRING"},
     },
-    "required": ["send", "topic", "country", "importance", "title_ru", "summary"],
+    "required": [
+        "send", "topic", "country", "importance", "title_ru", "lead", "detail"
+    ],
 }
 
 # Служебные слова, которые не участвуют в сравнении заголовков
@@ -221,7 +224,7 @@ def similarity(tokens_a, tokens_b):
 def is_repeat_ru(data, recent_ru, threshold):
     """Сравнивает русский заголовок+пересказ с уже отправленными."""
     tokens = title_tokens(
-        f"{data.get('title_ru', '')} {data.get('summary', '')[:200]}"
+        f"{data.get('title_ru', '')} {data.get('lead', '')[:250]}"
     )
     if not tokens:
         return False, set()
@@ -281,7 +284,7 @@ def build_prompt(item, config):
         else ""
     )
 
-    summary_len = config.get("summary_length", "3-4 предложения")
+    detail_len = config.get("detail_length", "3-5 предложений")
 
     strict = ""
     if item["source"] in config.get("strict_sources", []):
@@ -330,10 +333,17 @@ def build_prompt(item, config):
    ВАЖНО — значимое развитие событий по темам приоритета 3.
    ОБЫЧНО — всё остальное, что всё же стоит прочитать.
 5. title_ru — заголовок на русском, до 10 слов, без точки в конце.
-6. summary — пересказ на русском, {summary_len}. Излагай своими словами,
-   не переводи дословно и не копируй фразы из оригинала. Передай суть,
-   ключевые цифры и имена, причину события и его последствия.
-   Без вводных вроде «В статье говорится» и без названия издания.
+6. lead — САМОЕ ГЛАВНОЕ в 2-3 предложениях. Читатель по ним решает,
+   читать дальше или пролистать. Здесь: что произошло, где, с кем,
+   и главная цифра или факт. Никакой предыстории и никаких деталей,
+   только суть.
+7. detail — продолжение для тех, кто заинтересовался: {detail_len}.
+   Здесь: подробности, предыстория, контекст, реакция сторон,
+   последствия. НЕ повторяй то, что уже сказано в lead.
+
+Оба поля — своими словами, не переводи дословно и не копируй фразы
+из оригинала. Без вводных вроде «В статье говорится» и без названия
+издания. Если подробностей в источнике мало, detail оставь пустым.
 
 Если новость не подходит — send: false, остальные поля пустые строки."""
 
@@ -408,22 +418,32 @@ def format_message(item, data, emoji_map, show_hashtags=True):
     topic = data.get("topic", "")
     emoji = emoji_map.get(topic, emoji_map.get("_default", "📰"))
     title = esc(data.get("title_ru", "")).strip()
-    summary = esc(data.get("summary", "")).strip()
+    lead = esc(data.get("lead", "")).strip()
+    detail = esc(data.get("detail", "")).strip()
     country = (data.get("country") or "").strip()
     importance = (data.get("importance") or "").strip().upper()
 
-    head = f"{emoji} <b>{title}</b>" if title else f"{emoji} <b>{esc(topic)}</b>"
+    parts = []
+
+    # Пометка важности идёт отдельной строкой с пустой строкой после неё —
+    # иначе два эмодзи подряд ломают отображение текста в Telegram.
     if importance == "СРОЧНО":
-        head = f"🔴 <b>СРОЧНО</b>\n{head}"
+        parts.append("🔴 <b>СРОЧНО</b>")
+        parts.append("")
     elif importance == "ВАЖНО":
-        head = f"❗️ {head}"
+        parts.append("❗ <b>ВАЖНО</b>")
+        parts.append("")
 
-    signature = f"<i>{esc(item['source'])}</i>"
-    if country:
-        signature += f"  ·  {esc(country)}"
-    signature += f"  ·  <a href=\"{esc(item['link'])}\">Читать оригинал</a>"
+    parts.append(f"{emoji} <b>{title}</b>" if title else f"{emoji} <b>{esc(topic)}</b>")
+    parts.append("")
+    parts.append(lead)
 
-    parts = [head, "", summary, ""]
+    # Раскрывающийся блок с подробностями
+    if detail:
+        parts.append("")
+        parts.append(f"<blockquote expandable>{detail}</blockquote>")
+
+    parts.append("")
 
     n = item.get("sources_count", 1)
     if n > 1:
@@ -432,15 +452,18 @@ def format_message(item, data, emoji_map, show_hashtags=True):
         if also:
             line += f" (также {esc(also)})"
         parts.append(line)
-        parts.append("")
 
     if show_hashtags:
         tags = [t for t in (make_hashtag(topic), make_hashtag(country)) if t]
         if tags:
             parts.append(esc(" ".join(tags)))
-            parts.append("")
 
+    signature = f"<i>{esc(item['source'])}</i>"
+    if country:
+        signature += f"  ·  {esc(country)}"
+    signature += f"  ·  <a href=\"{esc(item['link'])}\">Читать оригинал</a>"
     parts.append(signature)
+
     return "\n".join(parts)
 
 
@@ -514,7 +537,7 @@ def main():
 
         new_ids.append(item["id"])
 
-        if data.get("send") and data.get("summary"):
+        if data.get("send") and data.get("lead"):
             # второй этап склейки — уже по русскому тексту
             repeat, ru_tokens = is_repeat_ru(data, state["recent_ru"], threshold)
             if repeat:
