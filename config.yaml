@@ -60,7 +60,7 @@ world_news_rss:
     url: "https://asia.nikkei.com/rss/feed/nar"
   - name: "Eurasianet"
     trust: 8
-    url: "https://news.google.com/rss/search?q=site%3Aeurasianet.org+when%3A1d&hl=en-US&gl=US&ceid=US:en"
+    url: "https://news.google.com/rss/search?q=site%3Aeurasianet.org+when%3A7d&hl=en-US&gl=US&ceid=US:en"
   - name: "Astana Times"
     trust: 7
     url: "https://astanatimes.com/feed/"
@@ -109,6 +109,10 @@ world_news_rss:
     trust: 5
     aggregate: true
     url: "https://news.google.com/rss/search?q=Kazakhstan+when%3A1d&hl=ru&gl=KZ&ceid=KZ:ru"
+  - name: "Центральная Азия"
+    trust: 5
+    aggregate: true
+    url: "https://news.google.com/rss/search?q=%22Central+Asia%22+OR+Uzbekistan+OR+Kyrgyzstan+when%3A2d&hl=en-US&gl=US&ceid=US:en"
   - name: "Мир (Google News)"
     trust: 4
     aggregate: true
@@ -119,9 +123,11 @@ world_news_rss:
     url: "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-US&gl=US&ceid=US:en"
 
 # ---------- ШАГ 1: ТОЛЬКО СВЕЖЕЕ ----------
-# Запуск ежечасный, поэтому окно 3 часа — с запасом на случай,
-# если один запуск пропустится.
-max_age_hours: 3
+# Насколько старые новости бот ещё рассматривает.
+# 8 часов дают заметно больший поток: в обработку попадают материалы,
+# вышедшие раньше и ещё не просмотренные. Дубли при этом не лезут —
+# отправленное помнится 72 часа (duplicate_memory_hours ниже).
+max_age_hours: 8
 
 # ---------- ШАГ 2: ОТСЕВ ПО СЛОВАМ ----------
 # Слово ищется целиком (war не поймает warning).
@@ -259,6 +265,148 @@ keywords:
   - выбор*
   - беженц*
   - терроризм
+  # --- добавлено для расширения потока ---
+  # Ближний Восток и регион
+  - jerusalem
+  - "west bank"
+  - netanyahu
+  - idf
+  - unrwa
+  - egypt
+  - jordan
+  - iraq
+  - baghdad
+  - tehran
+  - damascus
+  - riyadh
+  - ankara
+  - doha
+  - палестин*
+  - ливан
+  - йемен
+  - хамас
+  - хезболл*
+  - турци*
+  - сауд*
+  # Казахстан и соседи
+  - nazarbayev
+  - bektenov
+  - "national bank"
+  - kaspi
+  - kazatomprom
+  - kazmunaygas
+  - eurasian
+  - "caspian pipeline"
+  - назарбаев
+  - правительств*
+  - парламент
+  - мажилис
+  - аким*
+  - министр*
+  - нацбанк
+  - бюджет
+  - тариф*
+  - кашаган
+  - тенгиз
+  - уран
+  - зерн*
+  - урожа*
+  # Экономика
+  - "federal reserve"
+  - fed
+  - ecb
+  - bond
+  - bonds
+  - yields
+  - commodities
+  - copper
+  - uranium
+  - lng
+  - pipeline
+  - export
+  - imports
+  - deficit
+  - surplus
+  - "supply chain"
+  - логистик*
+  - импорт*
+  - экспорт*
+  - ставк*
+  - валют*
+  - доллар
+  - золот*
+  - газ
+  - уголь
+  - металл*
+  # Технологии
+  - google
+  - microsoft
+  - meta
+  - apple
+  - tesla
+  - huawei
+  - tsmc
+  - "machine learning"
+  - llm
+  - robot
+  - robots
+  - quantum
+  - cybersecurity
+  - ransomware
+  - "data breach"
+  - startup
+  - "venture capital"
+  - технолог*
+  - алгоритм*
+  - хакер*
+  - утечк*
+  - стартап*
+  # Религия и общество
+  - imam
+  - caliph
+  - madrasa
+  - halal
+  - eid
+  - pilgrimage
+  - minority
+  - minorities
+  - "human rights"
+  - халяль
+  - мечет*
+  - паломн*
+  - меньшинств*
+  - "права человека"
+  # Политика и конфликты
+  - trump
+  - biden
+  - xi
+  - zelensky
+  - macron
+  - scholz
+  - parliament
+  - president
+  - "prime minister"
+  - "foreign minister"
+  - diplomacy
+  - embassy
+  - protest
+  - protests
+  - strike
+  - strikes
+  - arrested
+  - killed
+  - wounded
+  - casualties
+  - трамп
+  - президент*
+  - премьер*
+  - посол
+  - протест*
+  - погиб*
+  - ранен*
+  - задержан*
+  - удар*
+  - обстрел*
 
 # ---------- ШАГ 3: ДЕДУПЛИКАЦИЯ ----------
 # Насколько похожими должны быть заголовки, чтобы считаться одной новостью.
@@ -437,9 +585,12 @@ never_send:
   - "криминальная хроника местного значения"
 
 # ---------- ЛИМИТЫ ----------
-# Обращений к ИИ за запуск. При 24 запусках в сутки 35 даёт до 840
-# при бесплатном лимите Gemini около 1500.
-max_ai_calls_per_run: 35
+# Обращений к ИИ за запуск. Потолок, а не цель: реально расходуется
+# столько, сколько новостей дошло до этого шага.
+# При 24 запусках в сутки 50 даёт максимум 1200 — впритык к бесплатному
+# лимиту Gemini (около 1500), но фактический расход будет меньше.
+# Если увидите в логе «дневной лимит исчерпан» — снизьте до 35.
+max_ai_calls_per_run: 50
 seconds_between_ai_calls: 3
 # Максимум новостей за один запуск. Запуск раз в час, значит это
 # и есть скорость подачи: до 20 новостей в час.
