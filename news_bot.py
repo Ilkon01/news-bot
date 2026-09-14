@@ -141,12 +141,32 @@ def clean_html(raw):
     return BeautifulSoup(raw, "html.parser").get_text(" ").strip()
 
 
+BROWSER_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/125.0 Safari/537.36"
+)
+
+
 def fetch_rss(src):
+    """Скачиваем ленту сами, с браузерным заголовком: часть сайтов
+    (в том числе Google News) отклоняет запросы от библиотек."""
     name, url = src["name"], src["url"]
     try:
-        feed = feedparser.parse(url)
+        resp = requests.get(
+            url,
+            timeout=25,
+            headers={
+                "User-Agent": BROWSER_UA,
+                "Accept": "application/rss+xml, application/xml, text/xml, */*",
+                "Accept-Language": "en-US,en;q=0.9,ru;q=0.8",
+            },
+        )
+        if resp.status_code != 200:
+            print(f"[{name}] сервер ответил {resp.status_code}")
+            return []
+        feed = feedparser.parse(resp.content)
     except Exception as e:
-        print(f"[{name}] ошибка чтения RSS: {e}")
+        print(f"[{name}] ошибка загрузки: {type(e).__name__}")
         return []
 
     items = []
@@ -157,17 +177,19 @@ def fetch_rss(src):
 
         title = entry.get("title", "")
         real_source = name
+        aggregate = src.get("aggregate", False)
         # У сводных лент Google News настоящий издатель лежит в поле source,
         # а в конце заголовка идёт хвост вида « - Reuters». Достаём и то, и то.
-        src_field = entry.get("source")
-        if isinstance(src_field, dict):
-            publisher = (src_field.get("title") or "").strip()
-            if publisher:
-                real_source = publisher
-        if real_source == name:
-            m = re.search(r"\s+-\s+([^-]{2,40})$", title)
-            if m:
-                real_source = m.group(1).strip()
+        if aggregate:
+            src_field = entry.get("source")
+            if isinstance(src_field, dict):
+                publisher = (src_field.get("title") or "").strip()
+                if publisher:
+                    real_source = publisher
+            if real_source == name:
+                m = re.search(r"\s+-\s+([^-]{2,40})$", title)
+                if m:
+                    real_source = m.group(1).strip()
         # убираем хвост с издателем из самого заголовка
         title = re.sub(r"\s+-\s+[^-]{2,40}$", "", title).strip()
 
