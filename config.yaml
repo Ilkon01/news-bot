@@ -60,7 +60,7 @@ world_news_rss:
     url: "https://asia.nikkei.com/rss/feed/nar"
   - name: "Eurasianet"
     trust: 8
-    url: "https://eurasianet.org/rss.xml"
+    url: "https://news.google.com/rss/search?q=site%3Aeurasianet.org+when%3A1d&hl=en-US&gl=US&ceid=US:en"
   - name: "Astana Times"
     trust: 7
     url: "https://astanatimes.com/feed/"
@@ -69,13 +69,13 @@ world_news_rss:
     url: "https://kursiv.media/feed/"
   - name: "Tengrinews"
     trust: 6
-    url: "https://tengrinews.kz/news/rss/"
+    url: "https://news.google.com/rss/search?q=site%3Atengrinews.kz+when%3A1d&hl=ru&gl=KZ&ceid=KZ:ru"
   - name: "Al Arabiya"
     trust: 6
-    url: "https://english.alarabiya.net/feed/rss2/en.xml"
+    url: "https://news.google.com/rss/search?q=site%3Aenglish.alarabiya.net+when%3A1d&hl=en-US&gl=US&ceid=US:en"
   - name: "Times of Israel"
     trust: 7
-    url: "https://www.timesofisrael.com/feed/"
+    url: "https://news.google.com/rss/search?q=site%3Atimesofisrael.com+when%3A1d&hl=en-US&gl=US&ceid=US:en"
   - name: "The Verge"
     trust: 7
     url: "https://www.theverge.com/rss/index.xml"
