@@ -11,24 +11,18 @@
 # =========================================================
 
 world_news_rss:
-  # ---------- Крупнейшие мировые агентства (высшее доверие) ----------
-  - name: "Reuters"
-    trust: 10
-    url: "https://news.google.com/rss/search?q=site%3Areuters.com+when%3A1d&hl=en-US&gl=US&ceid=US:en"
-  - name: "AP News"
-    trust: 10
-    url: "https://news.google.com/rss/search?q=site%3Aapnews.com+when%3A1d&hl=en-US&gl=US&ceid=US:en"
+  # =====================================================
+  # ПРЯМЫЕ ЛЕНТЫ ИЗДАНИЙ — самые надёжные, работают всегда
+  # =====================================================
   - name: "BBC World"
     trust: 9
     url: "http://feeds.bbci.co.uk/news/world/rss.xml"
   - name: "BBC Business"
     trust: 9
     url: "http://feeds.bbci.co.uk/news/business/rss.xml"
-  - name: "Bloomberg"
+  - name: "BBC Technology"
     trust: 9
-    url: "https://news.google.com/rss/search?q=site%3Abloomberg.com+when%3A1d&hl=en-US&gl=US&ceid=US:en"
-
-  # ---------- Крупные международные вещатели ----------
+    url: "http://feeds.bbci.co.uk/news/technology/rss.xml"
   - name: "Al Jazeera"
     trust: 8
     url: "https://www.aljazeera.com/xml/rss/all.xml"
@@ -41,55 +35,87 @@ world_news_rss:
   - name: "The Guardian"
     trust: 8
     url: "https://www.theguardian.com/world/rss"
-  - name: "Nikkei Asia"
+  - name: "The Guardian: технологии"
     trust: 8
-    url: "https://news.google.com/rss/search?q=site%3Aasia.nikkei.com+when%3A1d&hl=en-US&gl=US&ceid=US:en"
-  - name: "South China Morning Post"
-    trust: 7
-    url: "https://news.google.com/rss/search?q=site%3Ascmp.com+when%3A1d&hl=en-US&gl=US&ceid=US:en"
-
-  # ---------- Ближний Восток ----------
-  - name: "Al Arabiya"
-    trust: 6
-    url: "https://news.google.com/rss/search?q=site%3Aenglish.alarabiya.net+when%3A1d&hl=en-US&gl=US&ceid=US:en"
-  - name: "Middle East Eye"
-    trust: 6
-    url: "https://news.google.com/rss/search?q=site%3Amiddleeasteye.net+when%3A1d&hl=en-US&gl=US&ceid=US:en"
-  - name: "Anadolu Agency"
-    trust: 6
-    url: "https://news.google.com/rss/search?q=site%3Aaa.com.tr+when%3A1d&hl=en-US&gl=US&ceid=US:en"
-
-  # ---------- Казахстан и Центральная Азия ----------
-  - name: "Eurasianet"
-    trust: 8
-    url: "https://news.google.com/rss/search?q=site%3Aeurasianet.org+when%3A1d&hl=en-US&gl=US&ceid=US:en"
-  - name: "Kursiv"
-    trust: 7
-    url: "https://news.google.com/rss/search?q=site%3Akursiv.media+when%3A1d&hl=en-US&gl=US&ceid=US:en"
-  - name: "Astana Times"
-    trust: 7
-    url: "https://news.google.com/rss/search?q=site%3Aastanatimes.com+when%3A1d&hl=en-US&gl=US&ceid=US:en"
-  - name: "Tengrinews"
-    trust: 6
-    url: "https://news.google.com/rss/search?q=site%3Atengrinews.kz+when%3A1d&hl=en-US&gl=US&ceid=US:en"
+    url: "https://www.theguardian.com/uk/technology/rss"
   - name: "Atameken Business"
     trust: 7
     url: "https://inbusiness.kz/rss"
-  - name: "Казахстан (все источники)"
-    trust: 5
-    url: "https://news.google.com/rss/search?q=Kazakhstan+when%3A1d&hl=ru&gl=KZ&ceid=KZ:ru"
-
-  # ---------- Криптовалюта и технологии ----------
   - name: "ForkLog"
     trust: 6
     url: "https://forklog.com/feed/"
 
-  # ---------- Общие подборки Google News ----------
+  # --- Прямые ленты, добавлены как замена Google News ---
+  - name: "Middle East Eye"
+    trust: 6
+    url: "https://www.middleeasteye.net/rss"
+  - name: "Anadolu Agency"
+    trust: 6
+    url: "https://www.aa.com.tr/en/rss/default?cat=guncel"
+  - name: "South China Morning Post"
+    trust: 7
+    url: "https://www.scmp.com/rss/91/feed"
+  - name: "Nikkei Asia"
+    trust: 8
+    url: "https://asia.nikkei.com/rss/feed/nar"
+  - name: "Eurasianet"
+    trust: 8
+    url: "https://eurasianet.org/rss.xml"
+  - name: "Astana Times"
+    trust: 7
+    url: "https://astanatimes.com/feed/"
+  - name: "Kursiv"
+    trust: 7
+    url: "https://kursiv.media/feed/"
+  - name: "Tengrinews"
+    trust: 6
+    url: "https://tengrinews.kz/news/rss/"
+  - name: "Al Arabiya"
+    trust: 6
+    url: "https://english.alarabiya.net/feed/rss2/en.xml"
+  - name: "Times of Israel"
+    trust: 7
+    url: "https://www.timesofisrael.com/feed/"
+  - name: "The Verge"
+    trust: 7
+    url: "https://www.theverge.com/rss/index.xml"
+  - name: "Ars Technica"
+    trust: 7
+    url: "https://feeds.arstechnica.com/arstechnica/index"
+
+  # =====================================================
+  # ЧЕРЕЗ GOOGLE NEWS — для изданий без собственной ленты.
+  # Иногда Google перестаёт их отдавать; если в логе у них
+  # «ноль записей» несколько запусков подряд — это его сбой,
+  # а не ваша ошибка. Прямые ленты выше при этом работают.
+  # =====================================================
+  - name: "Reuters"
+    trust: 10
+    aggregate: true
+    url: "https://news.google.com/rss/search?q=site%3Areuters.com+when%3A1d&hl=en-US&gl=US&ceid=US:en"
+  - name: "AP News"
+    trust: 10
+    aggregate: true
+    url: "https://news.google.com/rss/search?q=site%3Aapnews.com+when%3A1d&hl=en-US&gl=US&ceid=US:en"
+  - name: "Bloomberg"
+    trust: 9
+    aggregate: true
+    url: "https://news.google.com/rss/search?q=site%3Abloomberg.com+when%3A1d&hl=en-US&gl=US&ceid=US:en"
+  - name: "Новости про ИИ"
+    trust: 6
+    aggregate: true
+    url: "https://news.google.com/rss/search?q=artificial+intelligence+OR+OpenAI+OR+Anthropic+when%3A1d&hl=en-US&gl=US&ceid=US:en"
+  - name: "Казахстан (все источники)"
+    trust: 5
+    aggregate: true
+    url: "https://news.google.com/rss/search?q=Kazakhstan+when%3A1d&hl=ru&gl=KZ&ceid=KZ:ru"
   - name: "Мир (Google News)"
     trust: 4
+    aggregate: true
     url: "https://news.google.com/rss/headlines/section/topic/WORLD?hl=en-US&gl=US&ceid=US:en"
   - name: "Экономика (Google News)"
     trust: 4
+    aggregate: true
     url: "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-US&gl=US&ceid=US:en"
 
 # ---------- ШАГ 1: ТОЛЬКО СВЕЖЕЕ ----------
@@ -396,6 +422,13 @@ editorial_rules:
 lead_max_chars: 100
 
 detail_length: "4-6 предложений"
+
+# ---------- СТРОГИЕ ИСТОЧНИКИ ----------
+# Для этих изданий ИИ пропускает ТОЛЬКО сообщения о конкретных
+# свершившихся фактах. Аналитика, колонки, прогнозы и материалы
+# с оценочной риторикой отклоняются.
+strict_sources:
+  - "France 24"
 
 never_send:
   - "материалы, продвигающие салафизм или религиозный экстремизм"
